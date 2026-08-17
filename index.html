@@ -655,6 +655,10 @@
           <div style="flex:1"><select id="qKid"></select></div>
           <div style="flex:0 0 90px"><input type="number" id="qXp" placeholder="XP" value="10" min="0" inputmode="numeric"></div>
         </div>
+        <label id="qGateRow" style="display:block;font-size:13.5px;font-weight:700;color:var(--gray);margin-top:10px">
+          <input type="checkbox" id="qGate" checked> Locks the bounty board until done
+          <span style="display:block;font-size:12px;font-weight:600">Uncheck for bedtime duties (PM teeth) — they still count for streaks.</span>
+        </label>
         <div class="decide"><button class="ok-btn" onclick="doAddDuty(this)">➕ Add it</button></div>
       </div>
     </div>
@@ -689,7 +693,7 @@
  *  Paste your Apps Script web app URL (the one ending in /exec)
  *  between the quotes below, then save/commit. That's it.
  * ════════════════════════════════════════════════════════════ */
-var API_URL = 'https://script.google.com/macros/s/AKfycbwdmMSkpFCxQ7fM429h-Scie5cmOxXqCsIp72fWzQ6X1XA7fa8lPgRv6diBwdolrcZC/exec';
+var API_URL = 'https://script.google.com/macros/s/AKfycbz_A218Q7aANOpLEQIf54m7l6GPOtZ4KwZ9z9HkXCtNrkIBXqqF8F90Jn-3q2lkWwx5/exec';
 
 /* Fallback wiring: opening the page once as
    https://yoursite/?api=<exec URL>  saves the URL on that device. */
@@ -962,9 +966,11 @@ function loadQuests() {
   });
 }
 function questRow(q, kind, idx) {
+  var late = (kind === 'Duty' && q.gates === false);
   return '<div class="qrow' + (q.done ? ' done' : '') + '" onclick="tapQuest(\'' + kind + '\',' + idx + ')">' +
     '<span class="qem">' + esc(q.emoji) + '</span>' +
-    '<span class="qt">' + esc(q.title) + '</span>' +
+    '<span class="qt">' + esc(q.title) +
+    (late ? ' <span style="font-size:11px;font-weight:900;color:var(--gray)">🌙 bedtime</span>' : '') + '</span>' +
     '<span class="qxp">+' + q.xp + ' XP</span>' +
     '<span class="qbox">' + (q.done ? '✓' : '') + '</span></div>';
 }
@@ -984,6 +990,7 @@ function renderBoard2() {
   if (!QD.gateOpen) {
     lock.style.display = 'flex';
     $('boardLockTxt').textContent = QD.dutiesLeft + (QD.dutiesLeft === 1 ? ' duty' : ' duties') + ' left 🔒';
+    // (bedtime 🌙 duties don't lock the board — they still count for the streak)
   } else lock.style.display = 'none';
   var h = '';
   if (!QD.board.length) h = '<div class="empty" style="padding:14px">No bounties posted right now — check back!</div>';
@@ -1837,7 +1844,8 @@ function renderBoard(board) {
   (board.dutyDefs || []).forEach(function (d) {
     dm += '<div class="grow"><span class="gname">' + esc(d.emoji) + ' ' + esc(d.title) +
       '<span style="display:block;font-size:12px;color:var(--gray);font-weight:700">' +
-      esc(d.kid) + ' · ' + d.type + ' · +' + d.xp + ' XP</span></span>' +
+      esc(d.kid) + ' · ' + d.type + ' · +' + d.xp + ' XP' +
+      (d.type === 'Duty' ? (d.gates === false ? ' · 🌙 bedtime' : ' · 🔒 locks board') : '') + '</span></span>' +
       '<button class="no-btn" style="border:none;border-radius:12px;padding:9px 12px;font-weight:900;cursor:pointer" ' +
       'onclick="doRemoveDuty(' + d.row + ',this)">Remove</button></div>';
   });
@@ -1853,12 +1861,14 @@ function setQuestKind(k) {
   questKind = k;
   $('qk-duty').classList.toggle('on', k === 'Duty');
   $('qk-daily').classList.toggle('on', k === 'Daily');
+  $('qGateRow').style.display = (k === 'Duty') ? 'block' : 'none';
 }
 function doAddDuty(btn) {
   var t = $('qTitle').value.trim();
   if (!t) { toast('Give the quest a name first!'); return; }
   btn.disabled = true;
-  api('addDuty', parentPin, $('qKid').value, questKind, t, $('qEmoji').value.trim(), $('qXp').value)
+  api('addDuty', parentPin, $('qKid').value, questKind, t, $('qEmoji').value.trim(), $('qXp').value,
+      questKind === 'Duty' ? $('qGate').checked : false)
     .then(function () {
       btn.disabled = false;
       $('qTitle').value = ''; $('qEmoji').value = '';
@@ -2041,14 +2051,15 @@ var demoDB = {
   ],
   nextEvRow: 4,
   dutyDefs: [
-    { row: 2, kid: 'All kids', type: 'Duty',  title: 'Make your bed',         emoji: '🛏️', xp: 10, active: true },
-    { row: 3, kid: 'All kids', type: 'Duty',  title: 'Brush teeth (AM + PM)', emoji: '🦷', xp: 10, active: true },
-    { row: 4, kid: 'All kids', type: 'Duty',  title: 'Tidy your zone',        emoji: '🧸', xp: 10, active: true },
-    { row: 5, kid: 'All kids', type: 'Daily', title: 'Move your body 20 min', emoji: '💪', xp: 10, active: true },
-    { row: 6, kid: 'All kids', type: 'Daily', title: 'One hour outside',      emoji: '🌳', xp: 15, active: true },
-    { row: 7, kid: 'All kids', type: 'Daily', title: 'Read 20 min',           emoji: '📖', xp: 10, active: true }
+    { row: 2, kid: 'All kids', type: 'Duty',  title: 'Make your bed',         emoji: '🛏️', xp: 10, active: true, gates: true },
+    { row: 3, kid: 'All kids', type: 'Duty',  title: 'Brush teeth (morning)', emoji: '🦷', xp: 5,  active: true, gates: true },
+    { row: 4, kid: 'All kids', type: 'Duty',  title: 'Brush teeth (bedtime)', emoji: '🌙', xp: 5,  active: true, gates: false },
+    { row: 5, kid: 'All kids', type: 'Duty',  title: 'Tidy your zone',        emoji: '🧸', xp: 10, active: true, gates: true },
+    { row: 6, kid: 'All kids', type: 'Daily', title: 'Move your body 20 min', emoji: '💪', xp: 10, active: true, gates: false },
+    { row: 7, kid: 'All kids', type: 'Daily', title: 'One hour outside',      emoji: '🌳', xp: 15, active: true, gates: false },
+    { row: 8, kid: 'All kids', type: 'Daily', title: 'Read 20 min',           emoji: '📖', xp: 10, active: true, gates: false }
   ],
-  nextDutyRow: 8,
+  nextDutyRow: 9,
   // per-kid economy state
   eco: {
     'Skyler':  { done: {}, baseStreak: 6, xp: 230, gold: 35 },
@@ -2100,8 +2111,8 @@ function demoQuestState(name) {
   defs.forEach(function (d) {
     var done = !!eco.done[d.title];
     if (!done) allDone = false;
-    var item = { title: d.title, emoji: d.emoji, xp: d.xp, done: done };
-    if (d.type === 'Duty') { duties.push(item); if (!done) dutiesLeft++; }
+    var item = { title: d.title, emoji: d.emoji, xp: d.xp, done: done, gates: d.gates !== false };
+    if (d.type === 'Duty') { duties.push(item); if (!done && d.gates !== false) dutiesLeft++; }
     else dailies.push(item);
   });
   var streak = eco.baseStreak + (allDone ? 1 : 0);
@@ -2363,7 +2374,8 @@ function demoApi(fn, args) {
           if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
           demoDB.dutyDefs.push({ row: demoDB.nextDutyRow++, kid: args[1] || 'All kids',
             type: args[2] === 'Daily' ? 'Daily' : 'Duty', title: args[3],
-            emoji: args[4] || '⭐', xp: parseInt(args[5], 10) || 10, active: true });
+            emoji: args[4] || '⭐', xp: parseInt(args[5], 10) || 10, active: true,
+            gates: args[2] === 'Daily' ? false : args[6] !== false });
           resolve({ ok: true });
         }
         else if (fn === 'setDutyActive') {
@@ -2429,3 +2441,4 @@ function demoApi(fn, args) {
 </script>
 </body>
 </html>
+

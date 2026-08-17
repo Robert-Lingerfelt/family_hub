@@ -235,6 +235,7 @@
     flex: 0 0 auto;
   }
   .qrow.done .qbox { background: var(--accent); border-color: var(--accent); }
+  .qrow.busy { opacity: .55; pointer-events: none; }
 
   /* ── bounty board ── */
   .board { position: relative; }
@@ -427,7 +428,7 @@
 <div id="demoBanner">👀 Demo preview with pretend data — deploy in Google Sheets for the real thing (PIN: 1234)</div>
 
 <header>
-  <button class="back" id="backBtn" onclick="goHome()">←</button>
+  <button class="back" id="backBtn" onclick="attemptSwitch()">←</button>
   <div>
     <h1 id="hTitle">🏡 Family Hub</h1>
     <div class="sub" id="hSub">Tap your face to start</div>
@@ -437,7 +438,7 @@
 <main>
   <!-- hero identity card (kids) -->
   <div class="hero" id="heroCard">
-    <div class="avwrap">
+    <div class="avwrap" onclick="if(me&&me.type!=='Adult')showTab('prizes')" style="cursor:pointer">
       <div class="avring" id="heroRing"></div>
       <div class="avdisc" id="heroDisc"><span id="heroFace">🙂</span><span class="avhat" id="heroHat" style="display:none"></span></div>
     </div>
@@ -639,6 +640,12 @@
       <div class="subhead">Recent decisions</div>
       <div id="recentList"></div>
 
+      <div class="subhead">📲 Device links (send once, stays signed in)</div>
+      <div class="card">
+        <div class="meta" style="margin-bottom:8px">Text each person their link. Opening it signs their device in as them and remembers it — kids then need the parent PIN to switch profiles.</div>
+        <div id="inviteList"></div>
+      </div>
+
       <div class="subhead">⚙️ Manage quests</div>
       <div id="dutyManage"></div>
       <div class="card">
@@ -693,7 +700,7 @@
  *  Paste your Apps Script web app URL (the one ending in /exec)
  *  between the quotes below, then save/commit. That's it.
  * ════════════════════════════════════════════════════════════ */
-var API_URL = 'https://script.google.com/macros/s/AKfycbz_A218Q7aANOpLEQIf54m7l6GPOtZ4KwZ9z9HkXCtNrkIBXqqF8F90Jn-3q2lkWwx5/exec';
+var API_URL = 'https://script.google.com/macros/s/AKfycbzPC-c6svJIyMvP5v2nEEdwigkxDuNHLH2VlmdfOpfsCjDPhtdwrH5N4avB-B49d47X/exec';
 
 /* Fallback wiring: opening the page once as
    https://yoursite/?api=<exec URL>  saves the URL on that device. */
@@ -907,10 +914,27 @@ api('getBootstrap').then(function (b) {
     btn.onclick = function () { pickMember(m); };
     g.appendChild(btn);
   });
+  // auto-resume: ?who=Name invite link (saved to this device) or last-used profile
+  var want = '';
+  try {
+    var qp = new URLSearchParams(location.search).get('who');
+    if (qp) {
+      want = qp;
+      localStorage.setItem('famAppWho', qp);
+      history.replaceState(null, '', location.pathname);
+    } else {
+      want = localStorage.getItem('famAppWho') || '';
+    }
+  } catch (e) {}
+  if (want) {
+    var match = FAMILY.filter(function (m) { return m.name.toLowerCase() === want.toLowerCase(); })[0];
+    if (match) pickMember(match);
+  }
 }).catch(function (e) { $('whoGrid').innerHTML = '<div class="empty">😵 ' + esc(e.message) + '</div>'; });
 
 function pickMember(m) {
   me = m;
+  try { localStorage.setItem('famAppWho', m.name); } catch (e) {}
   QD = null; SD = null;
   document.documentElement.style.setProperty('--accent', m.accent || '#2E8B57');
   $('hTitle').innerHTML = avHTML(m.avatar) + ' Hi, ' + esc(m.name) + '!';
@@ -936,6 +960,19 @@ function pickMember(m) {
   }
   refreshBadge();
   loadNudge();
+}
+function attemptSwitch() {
+  if (!me) { goHome(); return; }
+  if (me.type === 'Adult') { doSwitch(); return; }
+  // kid profile is locked to the device — a parent unlocks the switch
+  var p = prompt('Parent PIN to switch people:');
+  if (p === null) return;
+  api('checkPinOk', p.trim()).then(doSwitch)
+    .catch(function (e) { toast('🔒 ' + e.message); });
+}
+function doSwitch() {
+  try { localStorage.removeItem('famAppWho'); } catch (e) {}
+  goHome();
 }
 function goHome() {
   me = null; parentPin = null; QD = null; SD = null;
@@ -967,7 +1004,7 @@ function loadQuests() {
 }
 function questRow(q, kind, idx) {
   var late = (kind === 'Duty' && q.gates === false);
-  return '<div class="qrow' + (q.done ? ' done' : '') + '" onclick="tapQuest(\'' + kind + '\',' + idx + ')">' +
+  return '<div class="qrow' + (q.done ? ' done' : '') + (q._busy ? ' busy' : '') + '" onclick="tapQuest(\'' + kind + '\',' + idx + ')">' +
     '<span class="qem">' + esc(q.emoji) + '</span>' +
     '<span class="qt">' + esc(q.title) +
     (late ? ' <span style="font-size:11px;font-weight:900;color:var(--gray)">🌙 bedtime</span>' : '') + '</span>' +
@@ -1016,16 +1053,19 @@ function renderBoard2() {
   });
   $('bountyList').innerHTML = h;
 }
+var questBusy = false;
 function tapQuest(kind, idx) {
   var list = (kind === 'Duty') ? QD.duties : QD.dailies;
   var q = list[idx];
-  if (!q) return;
+  if (!q || questBusy) return;   // one tap at a time — no double-logging
+  questBusy = true;
   var title = q.title;
   var wasComplete = QD.todayComplete;
   var newDone = !q.done;
-  q.done = newDone; // optimistic
+  q.done = newDone; q._busy = true; // optimistic + locked
   renderQuests(); // instant feedback
   api('checkDuty', me.name, title, newDone).then(function (r) {
+    questBusy = false; q._busy = false;
     QD.streak = r.streak; QD.todayComplete = r.todayComplete;
     QD.xp = r.xp; QD.level = r.level; QD.intoLevel = r.intoLevel; QD.forNext = r.forNext;
     QD.gateOpen = r.gateOpen; QD.dutiesLeft = r.dutiesLeft; QD.gold = r.gold;
@@ -1039,6 +1079,7 @@ function tapQuest(kind, idx) {
         'Every quest done. Streak: ' + r.streak + ' 🔥 — the bounty board is open!', true);
     }
   }).catch(function (e) {
+    questBusy = false; q._busy = false;
     q.done = !newDone;
     renderQuests();
     toast('😬 ' + e.message);
@@ -1850,6 +1891,15 @@ function renderBoard(board) {
       'onclick="doRemoveDuty(' + d.row + ',this)">Remove</button></div>';
   });
   $('dutyManage').innerHTML = dm || '<div class="empty" style="padding:14px">No quests yet — add the first one below.</div>';
+  // invite links
+  var inv = '';
+  FAMILY.forEach(function (m) {
+    inv += '<div class="grow" onclick="copyInvite(\'' + esc(m.name) + '\')">' +
+      '<span class="gname">' + avHTML(m.avatar) + ' ' + esc(m.name) +
+      '</span><span class="gqty">tap = copy link</span></div>';
+  });
+  $('inviteList').innerHTML = inv;
+
   var qk = $('qKid');
   var kOpts = '<option value="All kids">All kids</option>';
   FAMILY.forEach(function (m) {
@@ -1967,6 +2017,17 @@ function doDecide(row, approve, btn) {
     api('getBootstrap').then(function (b) { RECIPES = b.recipes || RECIPES; }).catch(function () {});
     loadParentBoard();
   }).catch(function (e) { btn.disabled = false; toast('😵 ' + e.message); });
+}
+
+function copyInvite(name) {
+  var link = location.origin + location.pathname + '?who=' + encodeURIComponent(name);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(link).then(function () {
+      toast('📋 Copied — text it to ' + name + '!');
+    }, function () { prompt('Copy ' + name + '\'s link:', link); });
+  } else {
+    prompt('Copy ' + name + '\'s link:', link);
+  }
 }
 
 /* enter key on PINs */
@@ -2138,6 +2199,10 @@ function demoApi(fn, args) {
     setTimeout(function () {
       try {
         if (fn === 'getBootstrap') resolve({ appName: demoDB.appName, family: demoDB.family, recipes: demoDB.recipes.slice() });
+        else if (fn === 'checkPinOk') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          resolve({ ok: true });
+        }
         else if (fn === 'submitRequest') {
           if (!String(args[1] || '').trim()) throw new Error('Tell me what you want first!');
           demoDB.reqs.push({ row: demoDB.nextRow++, date: 'Today', name: args[0],
@@ -2441,4 +2506,3 @@ function demoApi(fn, args) {
 </script>
 </body>
 </html>
-

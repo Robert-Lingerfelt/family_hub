@@ -1,0 +1,2431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Family Hub</title>
+<style>
+  /* ─── Design tokens ───
+     Body type: system stack (fast on kid phones, works offline).
+     Display type: rounded system faces, weight 900 — the app's voice.
+     One signature element: the hero identity card (avatar + level ring
+     + gold + streak) that opens every kid's session. Everything else
+     stays quiet around it. */
+  :root {
+    --forest: #1E6B3C; --leaf: #2E8B57; --mint: #E7F4EC;
+    --bg: #F2F7F3; --card: #FFFFFF; --ink: #1F2A24; --gray: #68766D;
+    --line: #E2E9E4; --line2: #DFE7E1;
+    --sun: #F2B233; --sun-lt: #FFF4D6; --berry: #D64545;
+    --gold: #DA9E1B; --gold-lt: #FFF2CC; --gold-ink: #7A5A00;
+    --violet: #7C3AED; --violet-lt: #F3E8FF;
+    --chip-yes: #C9EFD3; --chip-buy: #DCE7F5; --chip-buy-ink: #2B4E7E;
+    --shadow: rgba(30,107,60,.10); --shadow2: rgba(30,107,60,.08);
+    --radius: 20px;
+    --disp: ui-rounded, "SF Pro Rounded", "Segoe UI", -apple-system, Roboto, sans-serif;
+    --accent: var(--leaf); /* replaced per person after sign-in */
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101815; --card: #1B2620; --ink: #EAF2ED; --gray: #93A399;
+      --line: #2A3830; --line2: #2F3E35; --mint: #21352A;
+      --sun-lt: #3A2F0F; --gold-lt: #3A2F0F; --gold-ink: #F2CC66;
+      --violet-lt: #2E2440; --chip-yes: #1F4630; --chip-buy: #203349; --chip-buy-ink: #9FC1EA;
+      --shadow: rgba(0,0,0,.35); --shadow2: rgba(0,0,0,.25);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg); color: var(--ink); min-height: 100vh;
+  }
+  #demoBanner {
+    display: none; background: #333; color: #fff; text-align: center;
+    font-size: 13px; padding: 6px 10px;
+  }
+  header {
+    background: linear-gradient(135deg, var(--forest), var(--accent));
+    color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+    border-radius: 0 0 var(--radius) var(--radius);
+  }
+  header .back {
+    background: rgba(255,255,255,.18); border: none; color: #fff; font-size: 22px;
+    width: 44px; height: 44px; border-radius: 14px; cursor: pointer; flex: 0 0 auto;
+    display: none;
+  }
+  header h1 { font-family: var(--disp); font-size: 20px; font-weight: 900; line-height: 1.2; }
+  header .sub { font-size: 13px; opacity: .88; }
+  main { max-width: 520px; margin: 0 auto; padding: 16px 16px 116px; }
+
+  /* ── hero identity card (signature) ── */
+  .hero {
+    display: none; align-items: center; gap: 14px;
+    background: var(--card); border-radius: var(--radius);
+    padding: 12px 14px; margin-bottom: 16px;
+    box-shadow: 0 3px 12px var(--shadow);
+    border-left: 6px solid var(--accent);
+  }
+  .hero.show { display: flex; }
+  .avwrap { position: relative; width: 74px; height: 74px; flex: 0 0 auto; }
+  .avring {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: conic-gradient(var(--accent) calc(var(--pct, 0) * 1%), var(--line) 0);
+  }
+  .avdisc {
+    position: absolute; inset: 5px; border-radius: 50%;
+    background: var(--mint); display: flex; align-items: center; justify-content: center;
+    font-size: 38px; line-height: 1; overflow: visible;
+    border: 3px solid transparent;
+  }
+  .avdisc.fr_mint    { border-color: #3DBB77; }
+  .avdisc.fr_sky     { border-color: #4D9DE0; }
+  .avdisc.fr_sunset  { border-color: #F08A3C; }
+  .avdisc.fr_rainbow { border-color: transparent; background-clip: padding-box; }
+  .avdisc.fr_rainbow::after {
+    content: ""; position: absolute; inset: -3px; border-radius: 50%; z-index: -1;
+    background: conic-gradient(#f66,#fc6,#6d6,#6cf,#96f,#f6c,#f66);
+  }
+  .avdisc.fr_fire    { border-color: #F2542D; box-shadow: 0 0 10px rgba(242,84,45,.6); }
+  .avdisc.bg_forest  { background: linear-gradient(160deg,#CFEBD8,#8FCFA6); }
+  .avdisc.bg_space   { background: linear-gradient(160deg,#2B2E5C,#514B8F); }
+  .avdisc.bg_beach   { background: linear-gradient(160deg,#FFE9B8,#9BDDE8); }
+  .avdisc.bg_stars   { background: radial-gradient(circle at 30% 30%, #4A4E86, #1D2044); }
+  .avhat {
+    position: absolute; top: -12px; left: 50%; transform: translateX(-50%) rotate(-8deg);
+    font-size: 26px; line-height: 1; z-index: 2; pointer-events: none;
+  }
+  .hero .hname { font-family: var(--disp); font-size: 19px; font-weight: 900; }
+  .hero .hlv {
+    display: inline-block; font-size: 12px; font-weight: 900; color: #fff;
+    background: var(--accent); border-radius: 999px; padding: 2px 9px; margin-left: 6px;
+    vertical-align: 2px;
+  }
+  .hero .hbar { height: 8px; background: var(--line); border-radius: 999px; margin: 7px 0 6px; overflow: hidden; }
+  .hero .hbar i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+  .hero .hmeta { font-size: 12.5px; color: var(--gray); font-weight: 700; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 4px; font-weight: 900; font-size: 14px;
+    border-radius: 999px; padding: 5px 11px;
+  }
+  .pill.gold { background: var(--gold-lt); color: var(--gold-ink); }
+  .pill.fire { background: var(--sun-lt); color: #8A5A00; }
+  .hero .pills { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; margin-left: auto; }
+
+  /* ── who picker ── */
+  .who-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px; }
+  .who-btn {
+    background: var(--card); border: 3px solid transparent; border-radius: var(--radius);
+    padding: 22px 10px; text-align: center; cursor: pointer;
+    box-shadow: 0 3px 10px var(--shadow); transition: transform .08s;
+  }
+  .who-btn:active { transform: scale(.95); }
+  .who-btn .face { font-size: 54px; line-height: 1; }
+  .who-btn .nm { font-family: var(--disp); font-size: 19px; font-weight: 900; margin-top: 10px; color: var(--forest); }
+  @media (prefers-color-scheme: dark) { .who-btn .nm { color: #8FD3AB; } }
+  .hint { text-align: center; color: var(--gray); font-size: 15px; margin: 14px 0 4px; }
+
+  /* ── tabs ── */
+  nav {
+    position: fixed; bottom: 0; left: 0; right: 0; background: var(--card);
+    display: flex; border-top: 1px solid var(--line); z-index: 20;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav button {
+    flex: 1; background: none; border: none; padding: 9px 2px 11px; cursor: pointer;
+    font-size: 11.5px; font-weight: 800; color: #98a89e; position: relative;
+  }
+  nav button .ic { display: block; font-size: 24px; margin-bottom: 2px; }
+  nav button.on { color: var(--accent); }
+  nav .badge {
+    position: absolute; top: 2px; right: calc(50% - 22px); background: var(--berry); color: #fff;
+    border-radius: 999px; font-size: 11px; min-width: 18px; height: 18px; line-height: 18px;
+    display: inline-block; padding: 0 4px; font-weight: 900;
+  }
+
+  .screen { display: none; }
+  .screen.on { display: block; animation: pop .18s ease-out; }
+  @keyframes pop { from { opacity: 0; transform: translateY(8px);} to { opacity: 1; transform: none;} }
+  @media (prefers-reduced-motion: reduce) {
+    .screen.on { animation: none; }
+    #celebrate .big { animation: none; }
+  }
+
+  h2 { font-family: var(--disp); font-size: 22px; font-weight: 900; color: var(--forest); margin: 4px 0 14px; }
+  @media (prefers-color-scheme: dark) { h2 { color: #8FD3AB; } }
+  .subhead { font-size: 13px; font-weight: 900; color: var(--gray); text-transform: uppercase;
+             letter-spacing: .06em; margin: 22px 0 10px; }
+
+  /* ── forms ── */
+  .quick-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+  .quick {
+    background: var(--card); border: 2px solid var(--line); border-radius: 16px; padding: 12px 4px;
+    text-align: center; cursor: pointer; transition: transform .08s; color: var(--ink);
+  }
+  .quick:active { transform: scale(.93); }
+  .quick.sel { border-color: var(--accent); background: var(--mint); }
+  .quick .em { font-size: 34px; line-height: 1; }
+  .quick .lb { font-size: 12.5px; font-weight: 700; margin-top: 5px; }
+  label.fld { display: block; font-size: 14px; font-weight: 700; color: var(--gray); margin: 12px 0 6px; }
+  input[type=text], input[type=number] {
+    width: 100%; font-size: 19px; padding: 13px 15px; border: 2px solid var(--line2);
+    border-radius: 16px; background: var(--card); color: var(--ink); outline: none; font-weight: 600;
+  }
+  input[type=text]:focus, input[type=number]:focus, select:focus, input[type=date]:focus, input[type=time]:focus { border-color: var(--accent); }
+  input[type=date], input[type=time] {
+    width: 100%; font-size: 18px; padding: 13px 14px; border: 2px solid var(--line2);
+    border-radius: 16px; background: var(--card); font-weight: 600; color: var(--ink);
+    font-family: inherit; -webkit-appearance: none; appearance: none; min-height: 52px;
+  }
+  .trow { display: flex; gap: 10px; }
+  .trow > div { flex: 1; }
+  .seg { display: flex; gap: 8px; margin-bottom: 16px; }
+  .seg button {
+    flex: 1; font-size: 15px; font-weight: 900; padding: 12px 4px; border-radius: 14px;
+    border: 2px solid var(--line2); background: var(--card); color: #98a89e; cursor: pointer;
+    font-family: var(--disp);
+  }
+  .seg button.on { border-color: var(--accent); background: var(--mint); color: var(--forest); }
+  @media (prefers-color-scheme: dark) { .seg button.on { color: #8FD3AB; } }
+  select {
+    width: 100%; font-size: 18px; padding: 13px 15px; border: 2px solid var(--line2);
+    border-radius: 16px; background: var(--card); font-weight: 600; color: var(--ink);
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='10'><path d='M1 1l7 7 7-7' stroke='%232E8B57' stroke-width='2.5' fill='none' stroke-linecap='round'/></svg>");
+    background-repeat: no-repeat; background-position: right 16px center;
+  }
+  .mealtag {
+    display: inline-block; background: var(--violet-lt); color: var(--violet); font-size: 12px;
+    font-weight: 800; padding: 3px 10px; border-radius: 999px; margin-left: 8px;
+    vertical-align: 2px;
+  }
+  a.linka { color: var(--leaf); font-weight: 700; font-size: 14px; }
+  .nudge {
+    background: linear-gradient(135deg, #FFF4D6, #FFE7A8); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(185,138,31,.20);
+  }
+  .nudge .nt { font-size: 17px; font-weight: 900; color: #6b5200; font-family: var(--disp); }
+  .nudge .nm2 { font-size: 14.5px; color: #7a6410; margin-top: 4px; }
+  .nudge .decide button { font-size: 16px; padding: 12px 6px; }
+  .nudge .later { background: rgba(255,255,255,.75); color: #7a6410; }
+  .bigbtn {
+    width: 100%; margin-top: 18px; background: linear-gradient(135deg, var(--accent), var(--forest));
+    color: #fff; font-size: 22px; font-weight: 900; border: none; border-radius: 22px;
+    padding: 19px; cursor: pointer; box-shadow: 0 6px 16px var(--shadow);
+    transition: transform .08s; font-family: var(--disp);
+  }
+  .bigbtn:active { transform: scale(.97); }
+  .bigbtn[disabled] { opacity: .6; }
+
+  /* ── quest lists ── */
+  .qrow {
+    display: flex; align-items: center; gap: 12px; background: var(--card);
+    border-radius: 16px; padding: 12px 14px; margin-bottom: 10px;
+    box-shadow: 0 2px 8px var(--shadow2); cursor: pointer; border: 2px solid transparent;
+    transition: transform .08s;
+  }
+  .qrow:active { transform: scale(.98); }
+  .qrow.done { border-color: var(--accent); background: var(--mint); }
+  .qrow .qem { font-size: 28px; line-height: 1; }
+  .qrow .qt { flex: 1; font-size: 16.5px; font-weight: 800; }
+  .qrow.done .qt { text-decoration: line-through; opacity: .65; }
+  .qrow .qxp { font-size: 12.5px; font-weight: 900; color: var(--gray); }
+  .qrow .qbox {
+    width: 30px; height: 30px; border-radius: 10px; border: 2.5px solid var(--line2);
+    display: flex; align-items: center; justify-content: center; font-size: 18px; color: #fff;
+    flex: 0 0 auto;
+  }
+  .qrow.done .qbox { background: var(--accent); border-color: var(--accent); }
+
+  /* ── bounty board ── */
+  .board { position: relative; }
+  .boardlock {
+    position: absolute; inset: -4px; border-radius: var(--radius); z-index: 5;
+    background: rgba(242,247,243,.8);
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    backdrop-filter: blur(2px); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center; gap: 6px;
+    font-weight: 900; color: var(--gray); font-size: 15.5px; padding: 20px;
+  }
+  .boardlock .biglock { font-size: 40px; }
+  .bounty {
+    background: var(--card); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px;
+    box-shadow: 0 2px 8px var(--shadow2); border-left: 6px solid var(--gold);
+  }
+  .bounty .bt { font-size: 17px; font-weight: 900; }
+  .bounty .bgold { float: right; }
+  .bounty .bmeta { font-size: 13px; color: var(--gray); margin-top: 3px; }
+
+  /* ── shop / prizes / wardrobe ── */
+  .prize {
+    background: var(--card); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px;
+    box-shadow: 0 2px 8px var(--shadow2); display: flex; align-items: center; gap: 12px;
+  }
+  .prize .pem { font-size: 30px; }
+  .prize .pt { flex: 1; font-size: 16.5px; font-weight: 800; }
+  .prize .pt .pn { font-size: 12.5px; color: var(--gray); font-weight: 700; display: block; }
+  .buybtn {
+    border: none; border-radius: 14px; background: var(--gold-lt); color: var(--gold-ink);
+    font-weight: 900; font-size: 15px; padding: 11px 14px; cursor: pointer; white-space: nowrap;
+  }
+  .buybtn[disabled] { opacity: .5; }
+  .wgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .witem {
+    background: var(--card); border: 2px solid var(--line); border-radius: 16px;
+    text-align: center; padding: 12px 6px; cursor: pointer; position: relative; color: var(--ink);
+  }
+  .witem .wem { font-size: 30px; line-height: 1; }
+  .witem .wn { font-size: 11.5px; font-weight: 800; margin-top: 5px; }
+  .witem .wp { font-size: 11px; font-weight: 900; color: var(--gold-ink); margin-top: 3px; }
+  .witem.owned { border-color: var(--accent); }
+  .witem.equip { background: var(--mint); border-color: var(--accent); }
+  .witem.lockd { opacity: .55; }
+  .witem .wtag {
+    position: absolute; top: -8px; right: 6px; font-size: 10px; font-weight: 900;
+    background: var(--sun-lt); color: #8A5A00; border-radius: 999px; padding: 2px 7px;
+  }
+
+  /* ── celebrate + confetti ── */
+  #celebrate {
+    display: none; position: fixed; inset: 0; background: rgba(30,107,60,.96); z-index: 50;
+    color: #fff; text-align: center; padding: 60px 24px; overflow: hidden;
+  }
+  #celebrate .big { font-size: 84px; animation: bounce .6s ease infinite alternate; }
+  @keyframes bounce { from { transform: translateY(0);} to { transform: translateY(-16px);} }
+  #celebrate h3 { font-family: var(--disp); font-size: 30px; font-weight: 900; margin: 18px 0 8px; }
+  #celebrate p { font-size: 17px; opacity: .92; }
+  #celebrate button {
+    margin-top: 30px; background: #fff; color: var(--forest); border: none;
+    font-size: 20px; font-weight: 900; padding: 16px 34px; border-radius: 999px; cursor: pointer;
+    font-family: var(--disp);
+  }
+  .conf {
+    position: absolute; top: -14px; width: 10px; height: 14px; border-radius: 3px;
+    animation: fall 1.7s linear forwards; z-index: 51; pointer-events: none;
+  }
+  @keyframes fall {
+    to { transform: translateY(110vh) rotate(540deg); opacity: .2; }
+  }
+
+  /* ── cards & chips ── */
+  .card {
+    background: var(--card); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px;
+    box-shadow: 0 2px 8px var(--shadow2); position: relative;
+  }
+  .card.new { outline: 3px solid var(--sun); }
+  .card .item { font-size: 18px; font-weight: 800; }
+  .card .meta { font-size: 13px; color: var(--gray); margin-top: 2px; }
+  .chip {
+    display: inline-block; margin-top: 10px; font-size: 14.5px; font-weight: 800;
+    padding: 7px 14px; border-radius: 999px;
+  }
+  .chip.wait { background: var(--sun-lt); color: #8A6D00; }
+  .chip.yes  { background: var(--chip-yes); color: var(--forest); }
+  @media (prefers-color-scheme: dark) { .chip.yes { color: #A9E6C2; } }
+  .chip.no   { background: var(--line); color: var(--gray); }
+  .chip.buy  { background: var(--chip-buy); color: var(--chip-buy-ink); }
+  .chip.gate { background: var(--gold-lt); color: var(--gold-ink); }
+  .newtag {
+    position: absolute; top: -10px; right: 12px; background: var(--berry); color: #fff;
+    font-size: 11px; font-weight: 900; padding: 3px 10px; border-radius: 999px;
+  }
+  .empty { text-align: center; color: var(--gray); padding: 36px 10px; font-size: 16px; }
+  .empty .em { font-size: 48px; display: block; margin-bottom: 10px; }
+
+  /* ── parent zone ── */
+  .pinbox { text-align: center; padding-top: 10px; }
+  .pinbox .lock { font-size: 58px; }
+  input.pinput {
+    text-align: center; font-size: 32px; letter-spacing: 12px; font-weight: 900;
+    max-width: 240px; margin: 18px auto 0; display: block;
+  }
+  .perr { color: var(--berry); font-weight: 700; margin-top: 10px; min-height: 22px; }
+  .pcard .who { font-size: 14px; font-weight: 700; color: var(--gray); }
+  .decide { display: flex; gap: 10px; margin-top: 12px; }
+  .decide button {
+    flex: 1; border: none; border-radius: 16px; font-size: 16px; font-weight: 900;
+    padding: 13px 6px; cursor: pointer; transition: transform .08s; font-family: var(--disp);
+  }
+  .decide button:active { transform: scale(.95); }
+  .ok-btn { background: var(--leaf); color: #fff; }
+  .no-btn { background: var(--line); color: var(--gray); }
+  .gold-btn { background: var(--gold); color: #fff; }
+  .standing {
+    display: inline-block; font-size: 12px; font-weight: 900; border-radius: 999px;
+    padding: 3px 9px; margin-left: 8px; vertical-align: 1px;
+  }
+  .standing.good { background: var(--chip-yes); color: var(--forest); }
+  .standing.bad { background: var(--sun-lt); color: #8A5A00; }
+  .kidstrip {
+    display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 14px;
+  }
+  .kidchip {
+    flex: 0 0 auto; background: var(--card); border-radius: 16px; padding: 10px 14px;
+    box-shadow: 0 2px 8px var(--shadow2); text-align: center; min-width: 96px;
+  }
+  .kidchip .ka { font-size: 26px; }
+  .kidchip .kn { font-size: 13px; font-weight: 900; margin-top: 2px; }
+  .kidchip .km { font-size: 11.5px; color: var(--gray); font-weight: 700; margin-top: 2px; }
+
+  /* ── grocery shop tab ── */
+  .grow {
+    display: flex; align-items: center; gap: 12px; background: var(--card);
+    border-radius: 14px; padding: 11px 14px; margin-bottom: 8px;
+    box-shadow: 0 1px 5px var(--shadow2); cursor: pointer;
+  }
+  .grow .gname { flex: 1; font-size: 16px; font-weight: 700; }
+  .grow.got .gname { text-decoration: line-through; opacity: .55; }
+  .grow .gqty { font-size: 13px; font-weight: 900; color: var(--gray); }
+  .grow .gbox {
+    width: 28px; height: 28px; border-radius: 9px; border: 2.5px solid var(--line2);
+    display: flex; align-items: center; justify-content: center; color: #fff; flex: 0 0 auto;
+  }
+  .grow.got .gbox { background: var(--leaf); border-color: var(--leaf); }
+  .sect { font-size: 12px; font-weight: 900; color: var(--gray); text-transform: uppercase;
+          letter-spacing: .05em; margin: 14px 0 8px; }
+  .dockrow { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .dockrow .dday { flex: 0 0 84px; font-size: 13.5px; font-weight: 900; color: var(--gray); }
+  .dockrow select { flex: 1; font-size: 15px; padding: 10px 12px; }
+  .dockrow .cookbtn {
+    flex: 0 0 auto; border: 2px solid var(--line2); background: var(--card); border-radius: 12px;
+    font-size: 16px; width: 44px; height: 44px; cursor: pointer;
+  }
+  .dockrow .cookbtn.on { background: var(--mint); border-color: var(--leaf); }
+
+  .wknav { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .wknav button {
+    width: 48px; height: 48px; border-radius: 14px; border: 2px solid var(--line2);
+    background: var(--card); font-size: 20px; font-weight: 900; color: var(--forest); cursor: pointer;
+  }
+  .wknav .wklabel { flex: 1; text-align: center; font-size: 17px; font-weight: 900; color: var(--forest); font-family: var(--disp); }
+  @media (prefers-color-scheme: dark) { .wknav .wklabel, .wknav button { color: #8FD3AB; } }
+  .dayrow { margin-bottom: 14px; }
+  .dayhdr {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 6px 12px; border-radius: 12px; font-weight: 800; color: var(--gray);
+  }
+  .dayhdr.today { background: var(--mint); color: var(--forest); }
+  @media (prefers-color-scheme: dark) { .dayhdr.today { color: #8FD3AB; } }
+  .dayhdr .dn { font-size: 16px; }
+  .dayhdr .dd { font-size: 13px; color: var(--gray); }
+  .evt {
+    background: var(--card); border-left: 5px solid var(--accent); border-radius: 12px;
+    padding: 10px 14px; margin: 6px 0 0 8px; box-shadow: 0 1px 5px var(--shadow2);
+  }
+  .evt .et { font-size: 15.5px; font-weight: 800; }
+  .evt .em2 { font-size: 13px; color: var(--gray); margin-top: 2px; }
+  .noevt { font-size: 13px; color: #b9c4bd; margin: 4px 0 0 20px; }
+  .toast {
+    position: fixed; left: 50%; transform: translateX(-50%); bottom: 96px; z-index: 60;
+    background: #222; color: #fff; padding: 12px 22px; border-radius: 999px; font-weight: 700;
+    font-size: 15px; opacity: 0; transition: opacity .25s; pointer-events: none; max-width: 90%;
+  }
+  .toast.show { opacity: 1; }
+  .spin { text-align: center; padding: 40px; font-size: 15px; color: var(--gray); }
+</style>
+</head>
+<body>
+<div id="demoBanner">👀 Demo preview with pretend data — deploy in Google Sheets for the real thing (PIN: 1234)</div>
+
+<header>
+  <button class="back" id="backBtn" onclick="goHome()">←</button>
+  <div>
+    <h1 id="hTitle">🏡 Family Hub</h1>
+    <div class="sub" id="hSub">Tap your face to start</div>
+  </div>
+</header>
+
+<main>
+  <!-- hero identity card (kids) -->
+  <div class="hero" id="heroCard">
+    <div class="avwrap">
+      <div class="avring" id="heroRing"></div>
+      <div class="avdisc" id="heroDisc"><span id="heroFace">🙂</span><span class="avhat" id="heroHat" style="display:none"></span></div>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div class="hname"><span id="heroName"></span><span class="hlv" id="heroLv">Lv 1</span></div>
+      <div class="hbar"><i id="heroBar" style="width:0%"></i></div>
+      <div class="hmeta" id="heroMeta"></div>
+    </div>
+    <div class="pills">
+      <span class="pill gold" id="heroGold">🪙 0</span>
+      <span class="pill fire" id="heroFire">🔥 0</span>
+    </div>
+  </div>
+
+  <!-- WHO -->
+  <div class="screen on" id="scr-who">
+    <p class="hint">Who's here?</p>
+    <div class="who-grid" id="whoGrid"><div class="spin">Loading the family…</div></div>
+  </div>
+
+  <!-- QUESTS -->
+  <div class="screen" id="scr-quests">
+    <h2>Today's quests ⚔️</h2>
+    <div id="dutyList"><div class="spin">Loading…</div></div>
+    <div class="subhead">Feel-good dailies 🌞</div>
+    <div id="dailyList"></div>
+    <div class="subhead">Bounty board 🪙</div>
+    <div class="board">
+      <div class="boardlock" id="boardLock" style="display:none">
+        <div class="biglock">🔒</div>
+        <div id="boardLockTxt"></div>
+        <div style="font-size:13px;font-weight:700">Finish your duties up top and the board opens!</div>
+      </div>
+      <div id="bountyList"></div>
+    </div>
+  </div>
+
+  <!-- PRIZES -->
+  <div class="screen" id="scr-prizes">
+    <h2>Prize shop 🎁</h2>
+    <div id="prizeList"><div class="spin">Loading…</div></div>
+    <div id="redeemList"></div>
+    <div id="proposedList"></div>
+    <div class="subhead">Pitch a new prize 💡</div>
+    <div class="card">
+      <label class="fld" style="margin-top:0">What should be in the shop?</label>
+      <input type="text" id="prizeIdea" placeholder="e.g. Stay up 30 min later" maxlength="80">
+      <label class="fld">Your pitch (optional)</label>
+      <input type="text" id="prizePitch" placeholder="why it's a great idea" maxlength="120">
+      <div class="decide"><button class="ok-btn" onclick="sendPrizeIdea(this)">💡 Pitch it!</button></div>
+      <div class="meta" style="margin-top:8px">A parent puts a gold price on it — then anyone can save up for it.</div>
+    </div>
+    <div class="subhead">Wardrobe 👕</div>
+    <div class="meta" style="margin-bottom:10px">Dress up your avatar! Gold buys the common stuff. The rare stuff can't be bought — only streaks earn it. 🔥</div>
+    <div id="wardrobe"></div>
+  </div>
+
+  <!-- ASK -->
+  <div class="screen" id="scr-ask">
+    <div class="nudge" id="nudgeBox" style="display:none">
+      <div class="nt" id="nudgeTitle"></div>
+      <div class="nm2" id="nudgeMsgTxt"></div>
+      <div class="decide">
+        <button class="ok-btn" id="nudgeYes" onclick="nudgeYes()">🍽️ I've got one!</button>
+        <button class="later" id="nudgeLater" onclick="nudgeLater()">Maybe later</button>
+      </div>
+    </div>
+    <h2>What do you want? 🤔</h2>
+    <div class="seg">
+      <button id="seg-item" class="on" onclick="setMode('item')">🛒 Grocery</button>
+      <button id="seg-meal" onclick="setMode('meal')">🍽️ Meal</button>
+      <button id="seg-event" onclick="setMode('event')">🎈 Event</button>
+    </div>
+    <div id="panel-item">
+      <div class="quick-grid" id="quickGrid"></div>
+      <label class="fld">…or type it</label>
+      <input type="text" id="itemInput" placeholder="e.g. Goldfish crackers" maxlength="80">
+    </div>
+    <div id="panel-meal" style="display:none">
+      <label class="fld">Pick from our recipe book</label>
+      <select id="recipeSel" onchange="onRecipeSel()"></select>
+      <div id="newMealBox" style="display:none">
+        <label class="fld">What's it called?</label>
+        <input type="text" id="newMealName" placeholder="e.g. Chicken Alfredo" maxlength="80">
+        <label class="fld">Link to the recipe 🔗 (optional)</label>
+        <input type="text" id="mealUrl" placeholder="paste a link here" maxlength="300">
+      </div>
+    </div>
+    <div id="panel-event" style="display:none">
+      <label class="fld">What kind of thing?</label>
+      <div class="quick-grid" id="evTypeGrid"></div>
+      <label class="fld">What's happening?</label>
+      <input type="text" id="evTitle" placeholder="e.g. Go to Emma's house" maxlength="100">
+      <label class="fld">What day?</label>
+      <input type="date" id="evDate">
+      <div class="trow">
+        <div><label class="fld">From (optional)</label><input type="time" id="evFrom"></div>
+        <div><label class="fld">Until (optional)</label><input type="time" id="evUntil"></div>
+      </div>
+      <label class="fld">Where / who with?</label>
+      <input type="text" id="evWhere" placeholder="e.g. Emma's house, her mom is home" maxlength="100">
+    </div>
+    <label class="fld" id="notesLabel">How many / which kind? (optional)</label>
+    <input type="text" id="notesInput" placeholder="e.g. the rainbow ones" maxlength="120">
+    <button class="bigbtn" id="sendBtn" onclick="sendRequest()">🚀 Send it!</button>
+  </div>
+
+  <!-- MINE -->
+  <div class="screen" id="scr-mine">
+    <h2>My stuff 📬</h2>
+    <div id="mineList"><div class="spin">Checking…</div></div>
+  </div>
+
+  <!-- WEEK -->
+  <div class="screen" id="scr-week">
+    <h2>Family calendar 📅</h2>
+    <div class="wknav">
+      <button onclick="chgWeek(-1)">‹</button>
+      <div class="wklabel" id="wkLabel">&nbsp;</div>
+      <button onclick="chgWeek(1)">›</button>
+    </div>
+    <div id="weekList"><div class="spin">Loading…</div></div>
+  </div>
+
+  <!-- SHOP (adults: docket + grocery) -->
+  <div class="screen" id="scr-shop">
+    <div id="shopGate" class="pinbox">
+      <div class="lock">🛒</div>
+      <h2 style="text-align:center">Shopping &amp; meals</h2>
+      <p class="hint">Parent PIN to open</p>
+      <input type="password" inputmode="numeric" id="shopPin" class="pinput" maxlength="8" placeholder="PIN">
+      <div class="perr" id="shopPinErr"></div>
+      <button class="bigbtn" style="max-width:240px;margin:10px auto 0;display:block;font-size:19px;padding:14px"
+              onclick="unlockShop()">Unlock</button>
+    </div>
+    <div id="shopBoard" style="display:none">
+      <h2>This week's meals 🍽️</h2>
+      <div id="docketList"><div class="spin">Loading…</div></div>
+      <h2 style="margin-top:22px">Grocery list 🛒</h2>
+      <div id="groceryList"></div>
+      <div class="subhead">Requested extras</div>
+      <div id="extrasList"></div>
+      <div class="decide" style="margin-top:16px">
+        <button class="no-btn" onclick="doClearGotIts(this)">🧹 Clear ✓s for a new week</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PARENT -->
+  <div class="screen" id="scr-parent">
+    <div id="pinGate" class="pinbox">
+      <div class="lock">🔒</div>
+      <h2 style="text-align:center">Parent Zone</h2>
+      <input type="password" inputmode="numeric" id="pin" class="pinput" maxlength="8" placeholder="PIN">
+      <div class="perr" id="pinErr"></div>
+      <button class="bigbtn" style="max-width:240px;margin:10px auto 0;display:block;font-size:19px;padding:14px"
+              onclick="unlock()">Unlock</button>
+    </div>
+    <div id="parentBoard" style="display:none">
+      <div class="subhead" style="margin-top:0">⚔️ Kid standings today</div>
+      <div class="kidstrip" id="kidStrip"></div>
+
+      <div class="subhead">🎈 Event requests</div>
+      <div id="evPendingList"></div>
+
+      <div class="subhead">🪙 Bounties to verify</div>
+      <div id="bountyVerifyList"></div>
+      <div class="card">
+        <div class="item">➕ Post a bounty</div>
+        <div class="trow" style="margin-top:10px">
+          <div style="flex:2"><input type="text" id="bTitle" placeholder="e.g. Rake the leaves" maxlength="80"></div>
+          <div style="flex:0 0 90px"><input type="number" id="bGold" placeholder="gold" min="1" inputmode="numeric"></div>
+        </div>
+        <div class="decide"><button class="gold-btn" onclick="doPostBounty(this)">🪙 Post it</button></div>
+      </div>
+
+      <div class="subhead">🎁 Prize pitches</div>
+      <div id="prizeProposalList"></div>
+
+      <div class="subhead">🎁 To make happen (bought prizes)</div>
+      <div id="redemptionList"></div>
+
+      <div class="card">
+        <div class="item">📣 Weekly nudge</div>
+        <div class="meta">Poke the whole family — friendly banner in the app + a text/email with the link.</div>
+        <div class="seg" style="margin-top:10px">
+          <button id="nk-meal" class="on" onclick="setNudgeKind('meal')">🍽️ Meal ideas</button>
+          <button id="nk-school" onclick="setNudgeKind('school')">🎒 School stuff</button>
+        </div>
+        <input type="text" id="nudgeCompose" placeholder="Optional custom message" maxlength="200" style="margin-top:10px;font-size:16px">
+        <div class="decide">
+          <button class="ok-btn" id="nudgeSendBtn" onclick="sendNudgeBtn(this)">📣 Send the nudge</button>
+        </div>
+        <div class="meta" id="nudgeStatus" style="margin-top:8px"></div>
+      </div>
+
+      <h2 style="margin-top:18px">Waiting for you 👀</h2>
+      <div id="pendingList"></div>
+      <div class="subhead">Recent decisions</div>
+      <div id="recentList"></div>
+
+      <div class="subhead">⚙️ Manage quests</div>
+      <div id="dutyManage"></div>
+      <div class="card">
+        <div class="item">➕ Add a quest</div>
+        <div class="seg" style="margin-top:10px">
+          <button id="qk-duty" class="on" onclick="setQuestKind('Duty')">Duty (required)</button>
+          <button id="qk-daily" onclick="setQuestKind('Daily')">Daily (feel-good)</button>
+        </div>
+        <div class="trow">
+          <div style="flex:2"><input type="text" id="qTitle" placeholder="e.g. Feed the cat" maxlength="80"></div>
+          <div style="flex:0 0 74px"><input type="text" id="qEmoji" placeholder="😺" maxlength="4"></div>
+        </div>
+        <div class="trow" style="margin-top:8px">
+          <div style="flex:1"><select id="qKid"></select></div>
+          <div style="flex:0 0 90px"><input type="number" id="qXp" placeholder="XP" value="10" min="0" inputmode="numeric"></div>
+        </div>
+        <div class="decide"><button class="ok-btn" onclick="doAddDuty(this)">➕ Add it</button></div>
+      </div>
+    </div>
+  </div>
+</main>
+<input type="file" id="proofFile" accept="image/*" style="display:none" onchange="proofPicked(this)">
+<input type="file" id="bountyFile" accept="image/*" style="display:none" onchange="bountyPicked(this)">
+
+<!-- celebrate -->
+<div id="celebrate">
+  <div class="big" id="celEmoji">🎉</div>
+  <h3 id="celTitle">Sent!</h3>
+  <p id="celMsg"></p>
+  <button onclick="closeCelebrate()">Okay!</button>
+</div>
+
+<nav id="tabs" style="display:none">
+  <button id="tab-quests" onclick="showTab('quests')"><span class="ic">⚔️</span>Quests</button>
+  <button id="tab-prizes" onclick="showTab('prizes')"><span class="ic">🎁</span>Prizes</button>
+  <button id="tab-ask" class="on" onclick="showTab('ask')"><span class="ic">🙋</span>Ask</button>
+  <button id="tab-mine" onclick="showTab('mine')"><span class="ic">📬</span>Mine<span class="badge" id="mineBadge" style="display:none"></span></button>
+  <button id="tab-week" onclick="showTab('week')"><span class="ic">📅</span>Week</button>
+  <button id="tab-shop" onclick="showTab('shop')" style="display:none"><span class="ic">🛒</span>Shop</button>
+  <button id="tab-parent" onclick="showTab('parent')" style="display:none"><span class="ic">🔒</span>Approve</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ════════════════════════════════════════════════════════════
+ *  ONE-TIME WIRING FOR GITHUB PAGES:
+ *  Paste your Apps Script web app URL (the one ending in /exec)
+ *  between the quotes below, then save/commit. That's it.
+ * ════════════════════════════════════════════════════════════ */
+var API_URL = '';
+
+/* Fallback wiring: opening the page once as
+   https://yoursite/?api=<exec URL>  saves the URL on that device. */
+(function () {
+  try {
+    var q = new URLSearchParams(location.search).get('api');
+    if (q && /^https:\/\/script\.google\.com\//.test(q)) {
+      localStorage.setItem('famAppApi', q);
+      history.replaceState(null, '', location.pathname);
+    }
+    if (!API_URL) API_URL = localStorage.getItem('famAppApi') || '';
+  } catch (e) {}
+})();
+
+/* ════════ server bridge (Apps Script ⇄ GitHub Pages ⇄ demo) ════════ */
+var HAS_GS = (typeof google !== 'undefined' && google.script);
+var DEMO = !HAS_GS && !API_URL;
+function api(fn) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  if (HAS_GS) {
+    return new Promise(function (resolve, reject) {
+      var runner = google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(function (e) { reject(new Error(e && e.message ? e.message : String(e))); });
+      runner[fn].apply(runner, args);
+    });
+  }
+  if (API_URL) {
+    return fetch(API_URL, { method: 'POST', body: JSON.stringify({ fn: fn, args: args }) })
+      .then(function (r) {
+        if (!r.ok) throw new Error('Connection problem (' + r.status + ') — try again!');
+        return r.json();
+      })
+      .then(function (j) {
+        if (!j.ok) throw new Error(j.error || 'Something went wrong — try again!');
+        return j.data;
+      });
+  }
+  return demoApi(fn, args);
+}
+
+/* ════════ wardrobe catalog — MUST mirror Code.gs COSMETICS ════════ */
+var COSMETICS = [
+  { id: 'hat_cap',    slot: 'hat',   emoji: '🧢', name: 'Cap',          cost: 25, unlock: { level: 2 } },
+  { id: 'hat_bow',    slot: 'hat',   emoji: '🎀', name: 'Bow',          cost: 25, unlock: { level: 2 } },
+  { id: 'hat_top',    slot: 'hat',   emoji: '🎩', name: 'Top hat',      cost: 40, unlock: { level: 2 } },
+  { id: 'hat_wizard', slot: 'hat',   emoji: '🧙', name: 'Wizard hat',   cost: 60, unlock: { level: 4 } },
+  { id: 'hat_crown',  slot: 'hat',   emoji: '👑', name: 'Golden crown', cost: 0,  unlock: { streak: 30 } },
+  { id: 'fr_mint',    slot: 'frame', emoji: '💚', name: 'Mint ring',    cost: 20, unlock: { level: 3 } },
+  { id: 'fr_sky',     slot: 'frame', emoji: '💙', name: 'Sky ring',     cost: 20, unlock: { level: 3 } },
+  { id: 'fr_sunset',  slot: 'frame', emoji: '🧡', name: 'Sunset ring',  cost: 30, unlock: { level: 3 } },
+  { id: 'fr_rainbow', slot: 'frame', emoji: '🌈', name: 'Rainbow ring', cost: 60, unlock: { level: 4 } },
+  { id: 'fr_fire',    slot: 'frame', emoji: '🔥', name: 'Fire ring',    cost: 0,  unlock: { streak: 14 } },
+  { id: 'bg_forest',  slot: 'bg',    emoji: '🌲', name: 'Forest',       cost: 30, unlock: { level: 5 } },
+  { id: 'bg_space',   slot: 'bg',    emoji: '🪐', name: 'Space',        cost: 40, unlock: { level: 5 } },
+  { id: 'bg_beach',   slot: 'bg',    emoji: '🏖️', name: 'Beach',        cost: 40, unlock: { level: 5 } },
+  { id: 'bg_stars',   slot: 'bg',    emoji: '🌟', name: 'Starfield',    cost: 0,  unlock: { streak: 100 } }
+];
+function cosmetic(id) {
+  for (var i = 0; i < COSMETICS.length; i++) if (COSMETICS[i].id === id) return COSMETICS[i];
+  return null;
+}
+var SLOT_NAMES = { hat: '🎩 Hats', frame: '⭕ Rings', bg: '🌄 Backgrounds' };
+
+/* per-person accents, assigned by Family-tab order */
+var ACCENTS = ['#3D6B9E', '#8E4E9E', '#E07020', '#DE4F93', '#12A5A0', '#5A9E3D',
+               '#B8442C', '#6C7A2E', '#2E7AA6', '#A6532E'];
+
+function $(id) { return document.getElementById(id); }
+/* Special avatar recolors: pairing an emoji with a colored heart tints it.
+   e.g. 🦖💛 on the Family tab = a yellow T-rex. */
+var AVATAR_FX = {
+  '🦖💛': { base: '🦖', style: 'filter:sepia(1) saturate(8) hue-rotate(20deg) brightness(1.2)' },
+  '🦖❤️': { base: '🦖', style: 'filter:sepia(1) saturate(8) hue-rotate(-40deg) brightness(1.05)' },
+  '🦖💙': { base: '🦖', style: 'filter:sepia(1) saturate(6) hue-rotate(170deg) brightness(1.05)' },
+  '🦕💛': { base: '🦕', style: 'filter:sepia(1) saturate(8) hue-rotate(20deg) brightness(1.2)' },
+  '🐱⭐': { custom: '<span style="position:relative;display:inline-block;line-height:1">🐱' +
+      '<span style="position:absolute;left:14%;top:34%;font-size:0.34em;line-height:1;filter:drop-shadow(0 0 1px rgba(140,60,0,.95)) drop-shadow(0 0 1px rgba(140,60,0,.6))">⭐</span>' +
+      '<span style="position:absolute;right:14%;top:34%;font-size:0.34em;line-height:1;filter:drop-shadow(0 0 1px rgba(140,60,0,.95)) drop-shadow(0 0 1px rgba(140,60,0,.6))">⭐</span></span>' },
+  '🐱💛': { custom: '<span style="position:relative;display:inline-block;line-height:1">🐱' +
+      '<span style="position:absolute;left:14%;top:34%;font-size:0.30em;line-height:1">💛</span>' +
+      '<span style="position:absolute;right:14%;top:34%;font-size:0.30em;line-height:1">💛</span></span>' }
+};
+function avHTML(av) {
+  var fx = AVATAR_FX[av];
+  if (fx && fx.custom) return fx.custom;
+  if (fx) return '<span style="display:inline-block;' + fx.style + '">' + fx.base + '</span>';
+  return esc(av);
+}
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
+}
+function toast(msg) {
+  var t = $('toast'); t.textContent = msg; t.classList.add('show');
+  setTimeout(function () { t.classList.remove('show'); }, 2600);
+}
+function showScreen(id) {
+  var scrs = document.querySelectorAll('.screen');
+  for (var i = 0; i < scrs.length; i++) scrs[i].classList.remove('on');
+  $('scr-' + id).classList.add('on');
+}
+var KID_TABS = ['quests', 'prizes', 'ask', 'mine', 'week'];
+var ADULT_TABS = ['ask', 'mine', 'week', 'shop', 'parent'];
+function showTab(id) {
+  showScreen(id);
+  ['quests','prizes','ask','mine','week','shop','parent'].forEach(function (t) {
+    $('tab-' + t).classList.toggle('on', t === id);
+  });
+  $('heroCard').classList.toggle('show', !!(me && me.type !== 'Adult' && QD));
+  if (id === 'quests') loadQuests();
+  if (id === 'prizes') loadShop();
+  if (id === 'mine') loadMine();
+  if (id === 'week') loadWeek();
+  if (id === 'shop' && parentPin) loadShopList();
+  if (id === 'parent' && parentPin) loadParentBoard();
+}
+
+/* ════════ app state ════════ */
+var me = null;          // {name, avatar, type, accent}
+var QD = null;          // quests cache
+var SD = null;          // shop cache
+var quickPick = null;
+var mode = 'item';
+var RECIPES = [];
+var FAMILY = [];
+var APPNAME = 'Family Hub';
+var weekOffset = 0;
+var curNudgeKind = 'meal';
+var nudgeKind = 'meal';
+var questKind = 'Duty';
+var evType = '🎉 Hang out';
+var EV_TYPES = [
+  ['🎉', 'Hang out', '🎉 '],
+  ['📚', 'Test', '📚 Test — '],
+  ['📝', 'Project', '📝 Project — '],
+  ['🎒', 'Field trip', '🎒 Field trip — '],
+  ['⚽', 'Game / practice', '⚽ '],
+  ['🎂', 'Party', '🎂 ']
+];
+var QUICKS = [
+  ['🍪','Cookies'], ['🍦','Ice cream'], ['🧃','Juice boxes'],
+  ['🍓','Strawberries'], ['🍌','Bananas'], ['🥣','Cereal'],
+  ['🍕','Pizza rolls'], ['🧀','Cheese sticks'], ['🥨','Pretzels'],
+  ['🍎','Apples'], ['🍫','Chocolate'], ['🍇','Grapes']
+];
+
+/* ════════ hero card ════════ */
+function paintHero() {
+  if (!me || me.type === 'Adult' || !QD) return;
+  var pct = QD.forNext > 0 ? Math.min(100, Math.round(100 * QD.intoLevel / QD.forNext)) : 100;
+  $('heroRing').style.setProperty('--pct', pct);
+  $('heroBar').style.width = pct + '%';
+  $('heroName').textContent = me.name;
+  $('heroLv').textContent = 'Lv ' + QD.level;
+  $('heroMeta').textContent = QD.intoLevel + ' / ' + QD.forNext + ' XP to level ' + (QD.level + 1);
+  $('heroGold').textContent = '🪙 ' + QD.gold;
+  $('heroFire').textContent = '🔥 ' + QD.streak;
+  var disc = $('heroDisc');
+  disc.className = 'avdisc';
+  var eq = (SD && SD.equipped) || {};
+  if (eq.frame) disc.classList.add(eq.frame);
+  if (eq.bg) disc.classList.add(eq.bg);
+  $('heroFace').innerHTML = avHTML(me.avatar);
+  var hat = eq.hat ? cosmetic(eq.hat) : null;
+  $('heroHat').style.display = hat ? 'block' : 'none';
+  if (hat) $('heroHat').textContent = hat.emoji;
+  $('heroCard').classList.add('show');
+}
+
+/* ════════ confetti ════════ */
+function confetti() {
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var colors = ['#F2B233', '#2E8B57', '#DA9E1B', '#DE4F93', '#4D9DE0', '#F2542D'];
+  var host = $('celebrate');
+  for (var i = 0; i < 26; i++) {
+    var c = document.createElement('div');
+    c.className = 'conf';
+    c.style.left = Math.random() * 100 + '%';
+    c.style.background = colors[i % colors.length];
+    c.style.animationDelay = (Math.random() * 0.5) + 's';
+    c.style.transform = 'rotate(' + Math.random() * 360 + 'deg)';
+    host.appendChild(c);
+    (function (el) { setTimeout(function () { el.remove(); }, 2400); })(c);
+  }
+}
+function celebrate(emoji, title, msg, withConfetti) {
+  $('celEmoji').textContent = emoji;
+  $('celTitle').textContent = title;
+  $('celMsg').textContent = msg;
+  $('celebrate').style.display = 'block';
+  if (withConfetti) confetti();
+}
+function closeCelebrate() { $('celebrate').style.display = 'none'; }
+
+/* ════════ boot ════════ */
+if (DEMO) $('demoBanner').style.display = 'block';
+api('getBootstrap').then(function (b) {
+  RECIPES = b.recipes || [];
+  FAMILY = b.family || [];
+  APPNAME = b.appName || 'Family Hub';
+  $('hTitle').textContent = '🏡 ' + APPNAME;
+  document.title = APPNAME;
+  var g = $('whoGrid'); g.innerHTML = '';
+  FAMILY.forEach(function (m, i) {
+    m.accent = ACCENTS[i % ACCENTS.length];
+    var btn = document.createElement('button');
+    btn.className = 'who-btn';
+    btn.innerHTML = '<div class="face">' + avHTML(m.avatar) + '</div><div class="nm">' + esc(m.name) + '</div>';
+    btn.onclick = function () { pickMember(m); };
+    g.appendChild(btn);
+  });
+}).catch(function (e) { $('whoGrid').innerHTML = '<div class="empty">😵 ' + esc(e.message) + '</div>'; });
+
+function pickMember(m) {
+  me = m;
+  QD = null; SD = null;
+  document.documentElement.style.setProperty('--accent', m.accent || '#2E8B57');
+  $('hTitle').innerHTML = avHTML(m.avatar) + ' Hi, ' + esc(m.name) + '!';
+  $('backBtn').style.display = 'block';
+  $('tabs').style.display = 'flex';
+  var isAdult = (m.type === 'Adult');
+  $('tab-quests').style.display = isAdult ? 'none' : 'block';
+  $('tab-prizes').style.display = isAdult ? 'none' : 'block';
+  $('tab-shop').style.display = isAdult ? 'block' : 'none';
+  $('tab-parent').style.display = isAdult ? 'block' : 'none';
+  buildQuicks();
+  buildRecipeSel();
+  buildEvTypes();
+  weekOffset = 0;
+  setMode('item');
+  if (isAdult) {
+    $('hSub').textContent = 'What are we sorting out today?';
+    $('heroCard').classList.remove('show');
+    showTab('ask');
+  } else {
+    $('hSub').textContent = 'Ready for today\'s quests?';
+    showTab('quests');
+  }
+  refreshBadge();
+  loadNudge();
+}
+function goHome() {
+  me = null; parentPin = null; QD = null; SD = null;
+  document.documentElement.style.setProperty('--accent', '#2E8B57');
+  $('hTitle').textContent = '🏡 ' + APPNAME;
+  $('hSub').textContent = 'Tap your face to start';
+  $('backBtn').style.display = 'none';
+  $('tabs').style.display = 'none';
+  $('heroCard').classList.remove('show');
+  $('pinGate').style.display = 'block';
+  $('parentBoard').style.display = 'none';
+  $('shopGate').style.display = 'block';
+  $('shopBoard').style.display = 'none';
+  $('pin').value = ''; $('pinErr').textContent = '';
+  $('shopPin').value = ''; $('shopPinErr').textContent = '';
+  showScreen('who');
+}
+
+/* ════════ quests ════════ */
+function loadQuests() {
+  if (!QD) $('dutyList').innerHTML = '<div class="spin">Loading…</div>';
+  api('getQuests', me.name).then(function (q) {
+    QD = q;
+    renderQuests();
+    paintHero();
+  }).catch(function (e) {
+    $('dutyList').innerHTML = '<div class="empty">😵 ' + esc(e.message) + '</div>';
+  });
+}
+function questRow(q, kind, idx) {
+  return '<div class="qrow' + (q.done ? ' done' : '') + '" onclick="tapQuest(\'' + kind + '\',' + idx + ')">' +
+    '<span class="qem">' + esc(q.emoji) + '</span>' +
+    '<span class="qt">' + esc(q.title) + '</span>' +
+    '<span class="qxp">+' + q.xp + ' XP</span>' +
+    '<span class="qbox">' + (q.done ? '✓' : '') + '</span></div>';
+}
+function renderQuests() {
+  var h = '';
+  if (!QD.duties.length) h = '<div class="empty">No duties set up yet — ask a parent to add some in the Approve tab!</div>';
+  QD.duties.forEach(function (q, i) { h += questRow(q, 'Duty', i); });
+  $('dutyList').innerHTML = h;
+  var h2 = '';
+  if (!QD.dailies.length) h2 = '<div class="empty" style="padding:14px">None yet!</div>';
+  QD.dailies.forEach(function (q, i) { h2 += questRow(q, 'Daily', i); });
+  $('dailyList').innerHTML = h2;
+  renderBoard2();
+}
+function renderBoard2() {
+  var lock = $('boardLock');
+  if (!QD.gateOpen) {
+    lock.style.display = 'flex';
+    $('boardLockTxt').textContent = QD.dutiesLeft + (QD.dutiesLeft === 1 ? ' duty' : ' duties') + ' left 🔒';
+  } else lock.style.display = 'none';
+  var h = '';
+  if (!QD.board.length) h = '<div class="empty" style="padding:14px">No bounties posted right now — check back!</div>';
+  QD.board.forEach(function (b) {
+    h += '<div class="bounty"><span class="pill gold bgold">🪙 ' + b.gold + '</span>' +
+      '<div class="bt">' + esc(b.emoji) + ' ' + esc(b.title) + '</div>';
+    if (b.status === 'Open') {
+      h += '<div class="bmeta">Up for grabs — first to claim it locks it!</div>' +
+        '<div class="decide"><button class="gold-btn" onclick="doClaim(' + b.row + ',this)">🙋 I\'ll do it!</button></div>';
+    } else if (b.mine && b.status === 'Claimed') {
+      h += '<div class="bmeta">You claimed this — get it done, then send it in!</div>' +
+        '<div class="decide">' +
+        '<button class="ok-btn" onclick="doSubmitBounty(' + b.row + ',true)">📸 Done — send photo</button>' +
+        '<button class="ok-btn" onclick="doSubmitBounty(' + b.row + ',false)">✅ Done — no photo</button>' +
+        '</div><div class="decide"><button class="no-btn" onclick="doDrop(' + b.row + ',this)">↩️ Un-claim it</button></div>';
+    } else if (b.mine && b.status === 'Submitted') {
+      h += '<div class="bmeta">Sent in! A parent will verify and pay. 🤞</div>' +
+        (b.note ? '<div class="bmeta">📝 ' + esc(b.note) + '</div>' : '');
+    } else {
+      h += '<div class="bmeta">🔒 Claimed by ' + esc(b.claimedBy) + '</div>';
+    }
+    h += '</div>';
+  });
+  $('bountyList').innerHTML = h;
+}
+function tapQuest(kind, idx) {
+  var list = (kind === 'Duty') ? QD.duties : QD.dailies;
+  var q = list[idx];
+  if (!q) return;
+  var title = q.title;
+  var wasComplete = QD.todayComplete;
+  var newDone = !q.done;
+  q.done = newDone; // optimistic
+  renderQuests(); // instant feedback
+  api('checkDuty', me.name, title, newDone).then(function (r) {
+    QD.streak = r.streak; QD.todayComplete = r.todayComplete;
+    QD.xp = r.xp; QD.level = r.level; QD.intoLevel = r.intoLevel; QD.forNext = r.forNext;
+    QD.gateOpen = r.gateOpen; QD.dutiesLeft = r.dutiesLeft; QD.gold = r.gold;
+    renderQuests();
+    paintHero();
+    if (r.minted) {
+      celebrate('🔥', r.minted.milestone + '-day streak!!',
+        'That\'s +' + r.minted.gold + ' gold minted just for showing up every day. Legend.', true);
+    } else if (newDone && r.todayComplete && !wasComplete) {
+      celebrate('🏆', 'Day complete!',
+        'Every quest done. Streak: ' + r.streak + ' 🔥 — the bounty board is open!', true);
+    }
+  }).catch(function (e) {
+    q.done = !newDone;
+    renderQuests();
+    toast('😬 ' + e.message);
+  });
+}
+function doClaim(row, btn) {
+  btn.disabled = true;
+  api('claimBounty', me.name, row).then(function () {
+    toast('🙋 It\'s yours — go get it done!');
+    loadQuests();
+  }).catch(function (e) { btn.disabled = false; toast('😬 ' + e.message); });
+}
+function doDrop(row, btn) {
+  btn.disabled = true;
+  api('dropBounty', me.name, row).then(function () {
+    toast('↩️ Back on the board.');
+    loadQuests();
+  }).catch(function (e) { btn.disabled = false; toast('😬 ' + e.message); });
+}
+var bountyRow = null;
+function doSubmitBounty(row, withPhoto) {
+  bountyRow = row;
+  if (withPhoto) { $('bountyFile').click(); return; }
+  api('submitBounty', me.name, row, '', '', '').then(function () {
+    toast('🪙 Sent for verification!');
+    loadQuests();
+  }).catch(function (e) { toast('😬 ' + e.message); });
+}
+function bountyPicked(inp) {
+  if (!inp.files || !inp.files[0] || bountyRow === null) return;
+  var file = inp.files[0];
+  toast('📸 Sending your photo…');
+  shrinkImage(file).then(function (b64) {
+    return api('submitBounty', me.name, bountyRow, b64, 'image/jpeg', '');
+  }).then(function () {
+    toast('🪙 Sent for verification!');
+    inp.value = ''; bountyRow = null;
+    loadQuests();
+  }).catch(function (e) {
+    inp.value = ''; bountyRow = null;
+    toast('😬 ' + e.message);
+  });
+}
+
+/* ════════ prizes + wardrobe ════════ */
+function loadShop() {
+  if (!SD) $('prizeList').innerHTML = '<div class="spin">Loading…</div>';
+  api('getShop', me.name).then(function (s) {
+    SD = s;
+    renderShop();
+    paintHero();
+  }).catch(function (e) {
+    $('prizeList').innerHTML = '<div class="empty">😵 ' + esc(e.message) + '</div>';
+  });
+}
+function renderShop() {
+  var h = '<div class="card" style="display:flex;align-items:center;gap:10px">' +
+    '<span style="font-size:34px">🪙</span><div style="flex:1">' +
+    '<div class="item" style="font-family:var(--disp)">' + SD.gold + ' gold</div>' +
+    '<div class="meta">Earn more with bounties and streaks!</div></div></div>';
+  if (!SD.prizes.length) h += '<div class="empty" style="padding:14px">The shop is empty — pitch a prize below!</div>';
+  SD.prizes.forEach(function (p) {
+    var can = SD.gold >= p.gold;
+    h += '<div class="prize"><span class="pem">' + esc(p.emoji) + '</span>' +
+      '<div class="pt">' + esc(p.title) +
+      (p.note ? '<span class="pn">' + esc(p.note) + '</span>' : '') + '</div>' +
+      '<button class="buybtn"' + (can ? '' : ' disabled') + ' onclick="doBuyPrize(' + p.row + ',this)">🪙 ' + p.gold + '</button></div>';
+  });
+  $('prizeList').innerHTML = h;
+
+  var rh = '';
+  if (SD.pendingRedemptions.length) {
+    rh = '<div class="subhead">Waiting to happen ⏳</div>';
+    SD.pendingRedemptions.forEach(function (r) {
+      rh += '<div class="card"><div class="item" style="font-size:16px">' + esc(r.reason) + '</div>' +
+        '<div class="meta">Bought ' + esc(r.date) + ' — a parent will make it happen!</div></div>';
+    });
+  }
+  $('redeemList').innerHTML = rh;
+
+  var ph = '';
+  if (SD.myProposed.length) {
+    ph = '<div class="subhead">Your pitches 💡</div>';
+    SD.myProposed.forEach(function (p) {
+      ph += '<div class="card"><div class="item" style="font-size:16px">' + esc(p.title) + '</div>' +
+        '<span class="chip wait">⏳ Waiting for a price</span></div>';
+    });
+  }
+  $('proposedList').innerHTML = ph;
+
+  // wardrobe grouped by slot
+  var wh = '';
+  ['hat', 'frame', 'bg'].forEach(function (slot) {
+    wh += '<div class="sect">' + SLOT_NAMES[slot] + '</div><div class="wgrid">';
+    COSMETICS.forEach(function (c) {
+      if (c.slot !== slot) return;
+      var owned = SD.owned.indexOf(c.id) >= 0;
+      var equipped = SD.equipped[slot] === c.id;
+      var lockedByLevel = c.unlock.level && SD.level < c.unlock.level;
+      var streakOnly = !!c.unlock.streak;
+      var cls = 'witem' + (equipped ? ' equip' : owned ? ' owned' : '') +
+        ((lockedByLevel || (streakOnly && !owned)) ? ' lockd' : '');
+      var tag = '';
+      if (streakOnly) tag = '<span class="wtag">🔥 ' + c.unlock.streak + 'd</span>';
+      else if (lockedByLevel) tag = '<span class="wtag">Lv ' + c.unlock.level + '</span>';
+      var price = '';
+      if (equipped) price = 'wearing it!';
+      else if (owned) price = 'tap to wear';
+      else if (streakOnly) price = 'streak only';
+      else price = '🪙 ' + c.cost;
+      wh += '<div class="' + cls + '" onclick="tapCosmetic(\'' + c.id + '\')">' + tag +
+        '<div class="wem">' + c.emoji + '</div><div class="wn">' + esc(c.name) + '</div>' +
+        '<div class="wp">' + price + '</div></div>';
+    });
+    wh += '</div>';
+  });
+  $('wardrobe').innerHTML = wh;
+}
+function doBuyPrize(row, btn) {
+  btn.disabled = true;
+  api('buyPrize', me.name, row).then(function (r) {
+    celebrate('🎁', 'Bought it!', 'A parent got pinged — they\'ll make it happen. Gold left: ' + r.gold + ' 🪙', true);
+    loadShop();
+    if (QD) { QD.gold = r.gold; paintHero(); }
+  }).catch(function (e) { btn.disabled = false; toast('😬 ' + e.message); });
+}
+function tapCosmetic(id) {
+  var c = cosmetic(id);
+  if (!c) return;
+  var owned = SD.owned.indexOf(id) >= 0;
+  if (owned) {
+    api('equipCosmetic', me.name, id).then(function () {
+      loadShop();
+      toast(SD.equipped[c.slot] === id ? '👕 Taken off.' : '✨ Looking good!');
+    }).catch(function (e) { toast('😬 ' + e.message); });
+    return;
+  }
+  if (c.unlock.streak) { toast('🔥 Only a ' + c.unlock.streak + '-day streak earns that — no gold accepted!'); return; }
+  if (c.unlock.level && SD.level < c.unlock.level) { toast('🔒 Unlocks at level ' + c.unlock.level + ' — keep questing!'); return; }
+  if (SD.gold < c.cost) { toast('🪙 You need ' + (c.cost - SD.gold) + ' more gold for that!'); return; }
+  api('buyCosmetic', me.name, id).then(function (r) {
+    celebrate(c.emoji, c.name + ' — yours!', 'It\'s on! Gold left: ' + r.gold + ' 🪙', true);
+    loadShop();
+    if (QD) { QD.gold = r.gold; paintHero(); }
+  }).catch(function (e) { toast('😬 ' + e.message); });
+}
+function sendPrizeIdea(btn) {
+  var t = $('prizeIdea').value.trim();
+  if (!t) { toast('Type your prize idea first! 💡'); return; }
+  btn.disabled = true;
+  api('proposePrize', me.name, t, $('prizePitch').value.trim()).then(function () {
+    btn.disabled = false;
+    $('prizeIdea').value = ''; $('prizePitch').value = '';
+    celebrate('💡', 'Pitched!', '"' + t + '" went to the parents. If they price it, it lands in the shop!', false);
+    loadShop();
+  }).catch(function (e) { btn.disabled = false; toast('😬 ' + e.message); });
+}
+
+/* ════════ ask (1.0, restyled) ════════ */
+function setMode(m) {
+  mode = m;
+  $('seg-item').classList.toggle('on', m === 'item');
+  $('seg-meal').classList.toggle('on', m === 'meal');
+  $('seg-event').classList.toggle('on', m === 'event');
+  $('panel-item').style.display = (m === 'item') ? 'block' : 'none';
+  $('panel-meal').style.display = (m === 'meal') ? 'block' : 'none';
+  $('panel-event').style.display = (m === 'event') ? 'block' : 'none';
+  if (m === 'meal') {
+    $('notesLabel').textContent = 'Anything to add? (optional)';
+    $('notesInput').placeholder = 'e.g. for my birthday dinner!';
+  } else if (m === 'event') {
+    $('notesLabel').textContent = 'Anything else parents should know? (optional)';
+    $('notesInput').placeholder = "e.g. Emma's mom will drive us";
+  } else {
+    $('notesLabel').textContent = 'How many / which kind? (optional)';
+    $('notesInput').placeholder = 'e.g. the rainbow ones';
+  }
+}
+function buildEvTypes() {
+  var g = $('evTypeGrid'); g.innerHTML = '';
+  EV_TYPES.forEach(function (t, i) {
+    var b = document.createElement('button');
+    b.className = 'quick' + (i === 0 ? ' sel' : '');
+    b.innerHTML = '<div class="em">' + t[0] + '</div><div class="lb">' + t[1] + '</div>';
+    b.onclick = function () {
+      var sel = document.querySelectorAll('#evTypeGrid .quick.sel');
+      for (var k = 0; k < sel.length; k++) sel[k].classList.remove('sel');
+      b.classList.add('sel');
+      evType = t[0] + ' ' + t[1];
+    };
+    g.appendChild(b);
+  });
+  evType = EV_TYPES[0][0] + ' ' + EV_TYPES[0][1];
+}
+function evTitlePrefix() {
+  for (var i = 0; i < EV_TYPES.length; i++) {
+    if (evType === EV_TYPES[i][0] + ' ' + EV_TYPES[i][1]) return EV_TYPES[i][2];
+  }
+  return '🎈 ';
+}
+function buildRecipeSel() {
+  var sel = $('recipeSel');
+  var h = '<option value="">— tap to pick a meal —</option>';
+  RECIPES.forEach(function (r) {
+    h += '<option value="' + esc(r) + '">' + esc(r) + '</option>';
+  });
+  h += '<option value="__new__">➕ It\'s not in there — add a new one!</option>';
+  sel.innerHTML = h;
+  sel.value = '';
+  $('newMealBox').style.display = 'none';
+  $('newMealName').value = ''; $('mealUrl').value = '';
+}
+function onRecipeSel() {
+  $('newMealBox').style.display = ($('recipeSel').value === '__new__') ? 'block' : 'none';
+}
+function buildQuicks() {
+  var g = $('quickGrid'); g.innerHTML = ''; quickPick = null;
+  QUICKS.forEach(function (q) {
+    var b = document.createElement('button');
+    b.className = 'quick';
+    b.innerHTML = '<div class="em">' + q[0] + '</div><div class="lb">' + q[1] + '</div>';
+    b.onclick = function () {
+      var sel = document.querySelectorAll('#quickGrid .quick.sel');
+      for (var i = 0; i < sel.length; i++) sel[i].classList.remove('sel');
+      b.classList.add('sel');
+      quickPick = q[1];
+      $('itemInput').value = q[1];
+    };
+    g.appendChild(b);
+  });
+  $('itemInput').value = ''; $('notesInput').value = '';
+}
+function sendRequest() {
+  if (mode === 'event') { sendEvent(); return; }
+  var isMeal = (mode === 'meal');
+  var item, url = '';
+  if (isMeal) {
+    var v = $('recipeSel').value;
+    if (!v) { toast('Pick a meal or add a new one! 🍽️'); return; }
+    if (v === '__new__') {
+      item = $('newMealName').value.trim();
+      if (!item) { toast('Type the meal\'s name first! 🙃'); return; }
+      url = $('mealUrl').value.trim();
+    } else {
+      item = v;
+    }
+  } else {
+    item = $('itemInput').value.trim();
+    if (!item) { toast('Pick something or type it first! 🙃'); return; }
+  }
+  var btn = $('sendBtn'); btn.disabled = true; btn.textContent = 'Sending…';
+  api('submitRequest', me.name, item, $('notesInput').value.trim(), isMeal, url)
+    .then(function () {
+      btn.disabled = false; btn.textContent = '🚀 Send it!';
+      celebrate(isMeal ? '🍽️' : '🚀', isMeal ? 'Meal idea sent!' : 'Request sent!',
+        '"' + item + '" is waiting for a grown-up to say yes. Check "Mine" to see what happens!', false);
+      buildQuicks();
+      buildRecipeSel();
+    })
+    .catch(function (e) {
+      btn.disabled = false; btn.textContent = '🚀 Send it!';
+      toast('😬 ' + e.message);
+    });
+}
+function sendEvent() {
+  var raw = $('evTitle').value.trim();
+  var d = $('evDate').value;
+  if (!raw) { toast('Tell me what the event is first! 🎈'); return; }
+  if (!d) { toast('Pick a day for it! 📅'); return; }
+  var title = evTitlePrefix() + raw;
+  var btn = $('sendBtn'); btn.disabled = true; btn.textContent = 'Sending…';
+  api('submitEvent', me.name, title, d, $('evFrom').value, $('evUntil').value,
+      $('evWhere').value.trim(), $('notesInput').value.trim())
+    .then(function () {
+      btn.disabled = false; btn.textContent = '🚀 Send it!';
+      celebrate('🎈', 'Event request sent!',
+        '"' + title + '" is waiting for a grown-up. If they say "yes IF", you can send proof right from Mine!', false);
+      $('evTitle').value = ''; $('evDate').value = ''; $('evFrom').value = '';
+      $('evUntil').value = ''; $('evWhere').value = ''; $('notesInput').value = '';
+    })
+    .catch(function (e) {
+      btn.disabled = false; btn.textContent = '🚀 Send it!';
+      toast('😬 ' + e.message);
+    });
+}
+
+/* ════════ nudges (1.0) ════════ */
+function loadNudge() {
+  $('nudgeBox').style.display = 'none';
+  api('getNudge', me.name).then(function (n) {
+    if (!n.active) return;
+    curNudgeKind = n.kind || 'meal';
+    var isSchool = (curNudgeKind === 'school');
+    $('nudgeTitle').textContent = (isSchool ? '🎒 ' : '📣 ') + n.by + ' asks:';
+    $('nudgeMsgTxt').textContent = n.message ||
+      (isSchool ? 'Any tests, projects, or school events coming up? Put them on the calendar!'
+                : 'Think of a new meal idea for this week!');
+    $('nudgeYes').textContent = isSchool ? '📚 Add school stuff' : "🍽️ I've got one!";
+    $('nudgeBox').style.display = 'block';
+  }).catch(function () {});
+}
+function nudgeYes() {
+  $('nudgeBox').style.display = 'none';
+  showTab('ask');
+  setMode(curNudgeKind === 'school' ? 'event' : 'meal');
+  api('dismissNudge', me.name).catch(function () {});
+}
+function setNudgeKind(k) {
+  nudgeKind = k;
+  $('nk-meal').classList.toggle('on', k === 'meal');
+  $('nk-school').classList.toggle('on', k === 'school');
+  $('nudgeCompose').placeholder = (k === 'school')
+    ? 'Optional message — e.g. report cards week!' : 'Optional custom message';
+}
+function nudgeLater() {
+  $('nudgeBox').style.display = 'none';
+  api('dismissNudge', me.name).catch(function () {});
+}
+
+/* ════════ week ════════ */
+function chgWeek(d) { weekOffset += d; loadWeek(); }
+function loadWeek() {
+  $('weekList').innerHTML = '<div class="spin">Loading…</div>';
+  api('getWeek', weekOffset).then(function (wk) {
+    $('wkLabel').textContent = wk.label;
+    var h = '';
+    wk.days.forEach(function (day) {
+      h += '<div class="dayrow"><div class="dayhdr' + (day.isToday ? ' today' : '') + '">' +
+           '<span class="dn">' + esc(day.label) + (day.isToday ? ' · today' : '') + '</span>' +
+           '<span class="dd">' + esc(day.num) + '</span></div>';
+      if (!day.events.length) {
+        h += '<div class="noevt">—</div>';
+      }
+      day.events.forEach(function (e) {
+        h += '<div class="evt"><div class="et">' + esc(e.title) + '</div>' +
+             '<div class="em2">' + esc(e.time) + (e.where ? ' · ' + esc(e.where) : '') + '</div></div>';
+      });
+      h += '</div>';
+    });
+    $('weekList').innerHTML = h;
+  }).catch(function (e) {
+    $('weekList').innerHTML = '<div class="empty">😵 ' + esc(e.message) + '</div>';
+  });
+}
+
+/* ════════ mine (with day-of gate chip) ════════ */
+function prettyWhen(ev) {
+  var s = '';
+  try {
+    var d = new Date(ev.date + 'T00:00:00');
+    s = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  } catch (e) { s = ev.date; }
+  if (ev.from) {
+    s += ' · ' + fmtTime(ev.from);
+    if (ev.until) s += '–' + fmtTime(ev.until);
+  }
+  return s;
+}
+function fmtTime(t) {
+  var m = String(t).match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return t;
+  var h = +m[1], ap = h >= 12 ? 'pm' : 'am';
+  h = h % 12 || 12;
+  return h + (m[2] === '00' ? '' : ':' + m[2]) + ap;
+}
+var EV_STATUS_UI = {
+  'Pending':    { cls: 'wait', txt: '⏳ Waiting for a decision' },
+  'NeedsProof': { cls: 'wait', txt: '📋 Yes, IF… (see below)' },
+  'ProofSent':  { cls: 'buy',  txt: '🔎 Proof sent — being reviewed' },
+  'Approved':   { cls: 'yes',  txt: "🎈 It's a GO — on the family calendar!" },
+  'Declined':   { cls: 'no',   txt: '😢 Not this time' }
+};
+function standingChip(st) {
+  if (!st || !st.hasQuests) return '';
+  if (st.gateOpen && st.missed7 <= 1) {
+    return '<span class="standing good">⚔️ duties done · 🔥 ' + st.streak + '</span>';
+  }
+  var bits = [];
+  if (!st.gateOpen) bits.push(st.dutiesLeft + ' duties left today');
+  if (st.missed7 > 1) bits.push(st.missed7 + ' missed this week');
+  return '<span class="standing bad">⚔️ ' + bits.join(' · ') + '</span>';
+}
+function eventCardHTML(ev, forParent, st) {
+  var ui = EV_STATUS_UI[ev.status] || EV_STATUS_UI['Pending'];
+  var isNew = (!forParent && !ev.seen &&
+    ['NeedsProof', 'Approved', 'Declined'].indexOf(ev.status) >= 0);
+  var h = '<div class="card' + (isNew ? ' new' : '') + '">' +
+    (isNew ? '<div class="newtag">NEW</div>' : '') +
+    (forParent ? '<div class="who">' + esc(ev.name) + standingChip(st) + '</div>' : '') +
+    '<div class="item">' + esc(ev.title) + '</div>' +
+    '<div class="meta">' + esc(prettyWhen(ev)) +
+    (ev.where ? ' · ' + esc(ev.where) : '') + '</div>' +
+    (ev.notes ? '<div class="meta">' + esc(ev.notes) + '</div>' : '');
+  if (ev.conditions && ev.status !== 'Pending') {
+    h += '<div class="meta" style="margin-top:6px"><b>📋 ' +
+         (ev.status === 'Declined' ? 'Why:' : 'The deal:') + '</b> ' + esc(ev.conditions) + '</div>';
+  }
+  ev.evidence.forEach(function (u, i2) {
+    var s = safeUrl(u);
+    if (s) h += '<div class="meta" style="margin-top:4px"><a class="linka" href="' + esc(s) +
+      '" target="_blank" rel="noopener">📸 Proof photo ' + (i2 + 1) + '</a></div>';
+  });
+  h += '<span class="chip ' + ui.cls + '">' + ui.txt + '</span>';
+  if (!forParent && ev.todayGate === false) {
+    h += ' <span class="chip gate">🔓 Unlocks when today\'s duties are done — ' + ev.dutiesLeft + ' left</span>';
+  }
+  if (!forParent && ev.todayGate === true) {
+    h += ' <span class="chip yes">⚔️ Duties done — you\'re clear for today!</span>';
+  }
+  if (!forParent && ev.status === 'NeedsProof') {
+    h += '<div class="decide"><button class="ok-btn" onclick="sendProof(' + ev.row +
+         ')">📸 Send proof</button></div>';
+  }
+  if (forParent) {
+    var suggest = (st && st.hasQuests && (!st.gateOpen || st.missed7 > 1))
+      ? 'Duties done every day until then — the app will show us both. '
+      : '';
+    h += '<div class="decide">' +
+      '<button class="ok-btn" onclick="doDecideEvent(' + ev.row + ',\'approve\',this)">✅ Yes</button>' +
+      '<button class="ok-btn" style="background:#B98A1F" onclick="toggleEvInput(' + ev.row + ',\'conditions\',\'' + (suggest ? '1' : '') + '\')">📋 Yes, if…</button>' +
+      '<button class="no-btn" onclick="toggleEvInput(' + ev.row + ',\'decline\',\'\')">❌ No</button>' +
+      '</div>' +
+      '<div id="evin-' + ev.row + '" style="display:none;margin-top:10px" data-suggest="' + esc(suggest) + '">' +
+      '<input type="text" id="evtxt-' + ev.row + '" maxlength="300" style="font-size:16px">' +
+      '<div class="decide"><button class="ok-btn" id="evgo-' + ev.row +
+      '" onclick="confirmEvInput(' + ev.row + ',this)">Send</button></div></div>';
+  }
+  return h + '</div>';
+}
+
+/* kid: proof upload with client-side resize */
+var proofRow = null;
+function sendProof(row) { proofRow = row; $('proofFile').click(); }
+function proofPicked(inp) {
+  if (!inp.files || !inp.files[0] || proofRow === null) return;
+  var file = inp.files[0];
+  toast('📸 Sending your photo…');
+  shrinkImage(file).then(function (b64) {
+    return api('submitEvidence', me.name, proofRow, b64, 'image/jpeg', 'proof.jpg');
+  }).then(function () {
+    toast('📸 Proof sent! Now we wait…');
+    inp.value = ''; proofRow = null;
+    loadMine();
+  }).catch(function (e) {
+    inp.value = ''; proofRow = null;
+    toast('😬 ' + e.message);
+  });
+}
+function shrinkImage(file) {
+  return new Promise(function (resolve, reject) {
+    var rd = new FileReader();
+    rd.onerror = function () { reject(new Error('Could not read that photo.')); };
+    rd.onload = function () {
+      var img = new Image();
+      img.onerror = function () { reject(new Error('That doesn\'t look like a photo.')); };
+      img.onload = function () {
+        var MAX = 1280;
+        var sc = Math.min(1, MAX / Math.max(img.width, img.height));
+        var cv = document.createElement('canvas');
+        cv.width = Math.round(img.width * sc); cv.height = Math.round(img.height * sc);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+        resolve(cv.toDataURL('image/jpeg', 0.8).split(',')[1]);
+      };
+      img.src = rd.result;
+    };
+    rd.readAsDataURL(file);
+  });
+}
+var STATUS_UI = {
+  'Pending':  { cls: 'wait', txt: '⏳ Waiting for a decision' },
+  'Approved': { cls: 'yes',  txt: '🎉 It made the list!' },
+  'Declined': { cls: 'no',   txt: '😢 Not this time' },
+  'Bought':   { cls: 'buy',  txt: '🛒 Bought it!' }
+};
+function statusUI(r) {
+  var ui = STATUS_UI[r.status] || STATUS_UI['Pending'];
+  if (r.type === 'Meal' && r.status === 'Approved') {
+    return { cls: 'yes', txt: '🍽️ It\'s going on the menu!' };
+  }
+  return ui;
+}
+function safeUrl(u) { return /^https?:\/\//i.test(String(u || '')) ? String(u) : ''; }
+function linkHTML(u) {
+  var s = safeUrl(u);
+  return s ? '<div class="meta" style="margin-top:6px"><a class="linka" href="' + esc(s) +
+             '" target="_blank" rel="noopener">🔗 See the recipe</a></div>' : '';
+}
+function loadMine() {
+  $('mineList').innerHTML = '<div class="spin">Checking…</div>';
+  Promise.all([api('getMyRequests', me.name), api('getMyEvents', me.name)])
+    .then(function (res) {
+      var list = res[0], evs = res[1];
+      if (!list.length && !evs.length) {
+        $('mineList').innerHTML = '<div class="empty"><span class="em">📭</span>Nothing yet — go ask for something!</div>';
+        return;
+      }
+      var h = '';
+      if (evs.length) {
+        h += '<div class="subhead" style="margin-top:0">🎈 My events</div>';
+        evs.forEach(function (ev) { h += eventCardHTML(ev, false, null); });
+      }
+      if (list.length) {
+        h += '<div class="subhead"' + (evs.length ? '' : ' style="margin-top:0"') + '>🛒 My requests</div>';
+        list.forEach(function (r) {
+          var ui = statusUI(r);
+          var isNew = (r.status !== 'Pending' && !r.seen);
+          h += '<div class="card' + (isNew ? ' new' : '') + '">' +
+               (isNew ? '<div class="newtag">NEW</div>' : '') +
+               '<div class="item">' + esc(r.item) +
+               (r.type === 'Meal' ? '<span class="mealtag">🍽️ Meal</span>' : '') + '</div>' +
+               '<div class="meta">' + esc(r.date) + (r.notes ? ' · ' + esc(r.notes) : '') + '</div>' +
+               linkHTML(r.url) +
+               '<span class="chip ' + ui.cls + '">' + ui.txt + '</span></div>';
+        });
+      }
+      $('mineList').innerHTML = h;
+      api('markSeen', me.name).then(refreshBadge);
+    })
+    .catch(function (e) { $('mineList').innerHTML = '<div class="empty">😵 ' + esc(e.message) + '</div>'; });
+}
+function refreshBadge() {
+  if (!me) return;
+  Promise.all([api('getMyRequests', me.name), api('getMyEvents', me.name)])
+    .then(function (res) {
+      var n = res[0].filter(function (r) { return r.status !== 'Pending' && !r.seen; }).length;
+      n += res[1].filter(function (ev) {
+        return ['NeedsProof', 'Approved', 'Declined'].indexOf(ev.status) >= 0 && !ev.seen;
+      }).length;
+      $('mineBadge').style.display = n ? 'inline-block' : 'none';
+      $('mineBadge').textContent = n;
+    }).catch(function () {});
+}
+
+/* ════════ SHOP tab (adults: docket + grocery) ════════ */
+var parentPin = null;
+function unlockShop() {
+  var pin = $('shopPin').value.trim();
+  $('shopPinErr').textContent = '';
+  api('getShopList', pin).then(function (data) {
+    parentPin = pin;
+    $('shopGate').style.display = 'none';
+    $('shopBoard').style.display = 'block';
+    renderShopList(data);
+  }).catch(function (e) { $('shopPinErr').textContent = e.message; });
+}
+function loadShopList() {
+  $('shopGate').style.display = 'none';
+  $('shopBoard').style.display = 'block';
+  api('getShopList', parentPin).then(renderShopList)
+    .catch(function (e) { toast('😵 ' + e.message); });
+}
+var SHOPD = null;
+function renderShopList(data) {
+  SHOPD = data;
+  var h = '';
+  data.docket.forEach(function (d) {
+    var opts = '<option value="">—</option>';
+    data.recipes.forEach(function (r) {
+      opts += '<option value="' + esc(r) + '"' + (r === d.recipe ? ' selected' : '') + '>' + esc(r) + '</option>';
+    });
+    h += '<div class="dockrow"><span class="dday">' + esc(d.day) + '</span>' +
+      '<select onchange="doSetDocket(' + d.idx + ',this)">' + opts + '</select>' +
+      '<button class="cookbtn' + (d.cooked ? ' on' : '') + '"' + (d.recipe ? '' : ' disabled') +
+      ' onclick="doSetCooked(' + d.idx + ',' + (d.cooked ? 'false' : 'true') + ',this)">' +
+      (d.cooked ? '✅' : '🍳') + '</button></div>';
+  });
+  $('docketList').innerHTML = h || '<div class="empty">The Weekly Docket tab looks empty.</div>';
+
+  var bySection = {};
+  var sections = [];
+  data.items.forEach(function (it) {
+    var s = it.section || 'Other';
+    if (!bySection[s]) { bySection[s] = []; sections.push(s); }
+    bySection[s].push(it);
+  });
+  var gh = '';
+  if (!data.items.length) gh = '<div class="empty" style="padding:14px">Pick meals above and their ingredients appear here.</div>';
+  sections.forEach(function (s) {
+    gh += '<div class="sect">' + esc(s) + '</div>';
+    bySection[s].forEach(function (it) {
+      gh += '<div class="grow' + (it.got ? ' got' : '') + '" onclick="tapGotIt(this,\'' + esc(it.key).replace(/'/g, '&#39;') + '\')">' +
+        '<span class="gname">' + esc(it.name) + '</span>' +
+        '<span class="gqty">' + it.qty + (it.unit ? ' ' + esc(it.unit) : '') + '</span>' +
+        '<span class="gbox">' + (it.got ? '✓' : '') + '</span></div>';
+    });
+  });
+  $('groceryList').innerHTML = gh;
+
+  var eh = '';
+  if (!data.extras.length) eh = '<div class="empty" style="padding:14px">No approved extras right now.</div>';
+  data.extras.forEach(function (x) {
+    eh += '<div class="grow" onclick="doMarkBought(' + x.row + ',this)">' +
+      '<span class="gname">' + esc(x.name) +
+      '<span style="display:block;font-size:12px;color:var(--gray);font-weight:700">' +
+      esc(x.by) + (x.notes ? ' · ' + esc(x.notes) : '') + '</span></span>' +
+      '<span class="gqty">tap = bought</span><span class="gbox"></span></div>';
+  });
+  $('extrasList').innerHTML = eh;
+}
+function tapGotIt(el, key) {
+  key = key.replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+  var nowGot = !el.classList.contains('got');
+  el.classList.toggle('got', nowGot);
+  el.querySelector('.gbox').textContent = nowGot ? '✓' : '';
+  api('setGotIt', parentPin, key, nowGot).catch(function (e) {
+    el.classList.toggle('got', !nowGot);
+    el.querySelector('.gbox').textContent = !nowGot ? '✓' : '';
+    toast('😵 ' + e.message);
+  });
+}
+function doMarkBought(row, el) {
+  el.style.opacity = .5;
+  api('markBought', parentPin, row).then(function () {
+    toast('🛒 Marked bought — off the list.');
+    loadShopList();
+  }).catch(function (e) { el.style.opacity = 1; toast('😵 ' + e.message); });
+}
+function doClearGotIts(btn) {
+  btn.disabled = true;
+  api('clearGotIts', parentPin).then(function () {
+    btn.disabled = false;
+    toast('🧹 Fresh week — all ✓s cleared.');
+    loadShopList();
+  }).catch(function (e) { btn.disabled = false; toast('😵 ' + e.message); });
+}
+function doSetDocket(idx, sel) {
+  api('setDocket', parentPin, idx, sel.value).then(function () {
+    toast(sel.value ? '🍽️ On the menu!' : 'Cleared.');
+    loadShopList();
+  }).catch(function (e) { toast('😵 ' + e.message); loadShopList(); });
+}
+function doSetCooked(idx, cooked, btn) {
+  btn.disabled = true;
+  api('setCooked', parentPin, idx, cooked).then(function () {
+    loadShopList();
+  }).catch(function (e) { btn.disabled = false; toast('😵 ' + e.message); });
+}
+
+/* ════════ parent zone ════════ */
+function unlock() {
+  var pin = $('pin').value.trim();
+  $('pinErr').textContent = '';
+  api('getParentBoard', pin).then(function (board) {
+    parentPin = pin;
+    $('pinGate').style.display = 'none';
+    $('parentBoard').style.display = 'block';
+    renderBoard(board);
+  }).catch(function (e) { $('pinErr').textContent = e.message; });
+}
+function loadParentBoard() {
+  $('pinGate').style.display = 'none';
+  $('parentBoard').style.display = 'block';
+  api('getParentBoard', parentPin).then(renderBoard)
+    .catch(function (e) { toast('😵 ' + e.message); });
+}
+function sendNudgeBtn(btn) {
+  btn.disabled = true;
+  api('sendNudge', parentPin, me.name, $('nudgeCompose').value.trim(), nudgeKind)
+    .then(function (r) {
+      btn.disabled = false;
+      $('nudgeCompose').value = '';
+      toast('📣 Nudge sent!' + (r.emailed ? ' ' + r.emailed + ' messages on the way.' : ''));
+      loadParentBoard();
+    })
+    .catch(function (e) { btn.disabled = false; toast('😵 ' + e.message); });
+}
+function famAvatar(name) {
+  for (var i = 0; i < FAMILY.length; i++) if (FAMILY[i].name === name) return FAMILY[i].avatar;
+  return '🙂';
+}
+function renderBoard(board) {
+  // kid standings strip
+  var ks = '';
+  Object.keys(board.standings || {}).forEach(function (kid) {
+    var st = board.standings[kid];
+    var m1 = st.hasQuests
+      ? (st.gateOpen ? '⚔️ done today' : '⚔️ ' + st.dutiesLeft + ' left')
+      : 'no quests yet';
+    var m2 = st.hasQuests ? '🔥 ' + st.streak + ' · ' + st.missed7 + ' missed/wk' : '';
+    ks += '<div class="kidchip"><div class="ka">' + avHTML(famAvatar(kid)) + '</div>' +
+      '<div class="kn">' + esc(kid) + '</div><div class="km">' + m1 + '</div>' +
+      (m2 ? '<div class="km">' + m2 + '</div>' : '') + '</div>';
+  });
+  $('kidStrip').innerHTML = ks || '<div class="empty" style="padding:10px">No kids on the Family tab.</div>';
+
+  // events with standing chips + Yes-IF prefill
+  var evh = '';
+  var evs = board.events || [];
+  if (!evs.length) evh = '<div class="empty" style="padding:16px">No event requests waiting.</div>';
+  evs.forEach(function (ev) {
+    evh += eventCardHTML(ev, true, (board.standings || {})[ev.name]);
+  });
+  var evr = board.eventsRecent || [];
+  if (evr.length) {
+    evh += '<div class="subhead" style="font-size:12px">Recent event decisions</div>';
+    evr.forEach(function (ev) {
+      var ui = EV_STATUS_UI[ev.status] || EV_STATUS_UI['Pending'];
+      evh += '<div class="card"><div class="who" style="font-size:13px;color:var(--gray)">' +
+        esc(ev.name) + '</div><div class="item" style="font-size:16px">' + esc(ev.title) +
+        '</div><span class="chip ' + ui.cls + '" style="font-size:13px">' + ui.txt + '</span></div>';
+    });
+  }
+  $('evPendingList').innerHTML = evh;
+
+  // bounty verification queue
+  var bv = '';
+  var bl = board.bountyVerify || [];
+  if (!bl.length) bv = '<div class="empty" style="padding:14px">Nothing to verify.</div>';
+  bl.forEach(function (b) {
+    bv += '<div class="card pcard"><div class="who">' + esc(b.claimedBy) + '</div>' +
+      '<div class="item">' + esc(b.emoji) + ' ' + esc(b.title) +
+      ' <span class="pill gold" style="font-size:12px">🪙 ' + b.gold + '</span></div>';
+    b.proof.forEach(function (u, i2) {
+      var s = safeUrl(u);
+      if (s) bv += '<div class="meta"><a class="linka" href="' + esc(s) + '" target="_blank" rel="noopener">📸 Proof ' + (i2 + 1) + '</a></div>';
+    });
+    if (b.note) bv += '<div class="meta">📝 ' + esc(b.note) + '</div>';
+    bv += '<div class="decide">' +
+      '<button class="gold-btn" onclick="doDecideBounty(' + b.row + ',true,this)">🪙 Pay ' + b.gold + '</button>' +
+      '<button class="no-btn" onclick="doDecideBounty(' + b.row + ',false,this)">🔁 Send back</button>' +
+      '</div></div>';
+  });
+  var bo = board.bountyOpen || [];
+  if (bo.length) {
+    bv += '<div class="subhead" style="font-size:12px">On the board now</div>';
+    bo.forEach(function (b) {
+      bv += '<div class="card"><div class="item" style="font-size:15px">' + esc(b.emoji) + ' ' + esc(b.title) +
+        ' · 🪙 ' + b.gold + '</div><div class="meta">' +
+        (b.status === 'Open' ? 'Unclaimed' : 'Claimed by ' + esc(b.claimedBy)) + '</div></div>';
+    });
+  }
+  $('bountyVerifyList').innerHTML = bv;
+
+  // prize proposals
+  var pp = '';
+  var pl = board.prizeProposals || [];
+  if (!pl.length) pp = '<div class="empty" style="padding:14px">No pitches waiting.</div>';
+  pl.forEach(function (p) {
+    pp += '<div class="card pcard"><div class="who">' + esc(p.proposedBy) + ' pitched:</div>' +
+      '<div class="item">' + esc(p.title) + '</div>' +
+      (p.note ? '<div class="meta">💬 ' + esc(p.note) + '</div>' : '') +
+      '<div class="trow" style="margin-top:10px">' +
+      '<div style="flex:0 0 100px"><input type="number" id="pg-' + p.row + '" placeholder="gold" min="1" inputmode="numeric"></div>' +
+      '<div style="flex:1;display:flex;align-items:center">' +
+      '<label style="font-size:13.5px;font-weight:700;color:var(--gray)"><input type="checkbox" id="pa-' + p.row + '" checked> for everyone</label></div>' +
+      '</div>' +
+      '<div class="decide">' +
+      '<button class="gold-btn" onclick="doPricePrize(' + p.row + ',this)">🎁 Into the shop</button>' +
+      '<button class="no-btn" onclick="doRetirePrize(' + p.row + ',this)">❌ Pass</button>' +
+      '</div></div>';
+  });
+  $('prizeProposalList').innerHTML = pp;
+
+  // redemptions
+  var rh = '';
+  var rl = board.redemptions || [];
+  if (!rl.length) rh = '<div class="empty" style="padding:14px">Nothing bought and waiting.</div>';
+  rl.forEach(function (r) {
+    rh += '<div class="card pcard"><div class="who">' + esc(r.kid) + ' · ' + esc(r.date) + '</div>' +
+      '<div class="item" style="font-size:16px">' + esc(r.reason) + ' <span class="pill gold" style="font-size:12px">🪙 ' + r.gold + '</span></div>' +
+      '<div class="decide"><button class="ok-btn" onclick="doFulfill(' + r.row + ',this)">✅ Made it happen</button></div></div>';
+  });
+  $('redemptionList').innerHTML = rh;
+
+  $('nudgeStatus').textContent = board.nudge
+    ? 'Active nudge from ' + board.nudge.by + ' · sent ' + board.nudge.date
+    : 'No active nudge right now.';
+
+  // requests
+  var p = '';
+  if (!board.pending.length) {
+    p = '<div class="empty"><span class="em">🎉</span>All caught up — nothing waiting!</div>';
+  }
+  board.pending.forEach(function (r) {
+    var isMeal = (r.type === 'Meal');
+    p += '<div class="card pcard">' +
+         '<div class="who">' + esc(r.name) + ' · ' + esc(r.date) + '</div>' +
+         '<div class="item">' + esc(r.item) +
+         (isMeal ? '<span class="mealtag">🍽️ Meal idea</span>' : '') + '</div>' +
+         (r.notes ? '<div class="meta">' + esc(r.notes) + '</div>' : '') +
+         linkHTML(r.url) +
+         '<div class="decide">' +
+         '<button class="ok-btn" onclick="doDecide(' + r.row + ',true,this)">' +
+         (isMeal ? '✅ Add to menu' : '✅ Add to list') + '</button>' +
+         '<button class="no-btn" onclick="doDecide(' + r.row + ',false,this)">❌ Not this time</button>' +
+         '</div></div>';
+  });
+  $('pendingList').innerHTML = p;
+  var rec = '';
+  if (!board.recent.length) rec = '<div class="empty">No decisions yet.</div>';
+  board.recent.forEach(function (r) {
+    var ui = statusUI(r);
+    rec += '<div class="card"><div class="who" style="font-size:13px;color:var(--gray)">' + esc(r.name) + '</div>' +
+           '<div class="item" style="font-size:16px">' + esc(r.item) +
+           (r.type === 'Meal' ? '<span class="mealtag">🍽️</span>' : '') + '</div>' +
+           '<span class="chip ' + ui.cls + '" style="font-size:13px">' + ui.txt + '</span></div>';
+  });
+  $('recentList').innerHTML = rec;
+
+  // quest manager
+  var dm = '';
+  (board.dutyDefs || []).forEach(function (d) {
+    dm += '<div class="grow"><span class="gname">' + esc(d.emoji) + ' ' + esc(d.title) +
+      '<span style="display:block;font-size:12px;color:var(--gray);font-weight:700">' +
+      esc(d.kid) + ' · ' + d.type + ' · +' + d.xp + ' XP</span></span>' +
+      '<button class="no-btn" style="border:none;border-radius:12px;padding:9px 12px;font-weight:900;cursor:pointer" ' +
+      'onclick="doRemoveDuty(' + d.row + ',this)">Remove</button></div>';
+  });
+  $('dutyManage').innerHTML = dm || '<div class="empty" style="padding:14px">No quests yet — add the first one below.</div>';
+  var qk = $('qKid');
+  var kOpts = '<option value="All kids">All kids</option>';
+  FAMILY.forEach(function (m) {
+    if (m.type !== 'Adult') kOpts += '<option value="' + esc(m.name) + '">' + esc(m.name) + '</option>';
+  });
+  qk.innerHTML = kOpts;
+}
+function setQuestKind(k) {
+  questKind = k;
+  $('qk-duty').classList.toggle('on', k === 'Duty');
+  $('qk-daily').classList.toggle('on', k === 'Daily');
+}
+function doAddDuty(btn) {
+  var t = $('qTitle').value.trim();
+  if (!t) { toast('Give the quest a name first!'); return; }
+  btn.disabled = true;
+  api('addDuty', parentPin, $('qKid').value, questKind, t, $('qEmoji').value.trim(), $('qXp').value)
+    .then(function () {
+      btn.disabled = false;
+      $('qTitle').value = ''; $('qEmoji').value = '';
+      toast('➕ Added!');
+      loadParentBoard();
+    }).catch(function (e) { btn.disabled = false; toast('😵 ' + e.message); });
+}
+function doRemoveDuty(row, btn) {
+  btn.disabled = true;
+  api('setDutyActive', parentPin, row, false).then(function () {
+    toast('Removed from the daily list.');
+    loadParentBoard();
+  }).catch(function (e) { btn.disabled = false; toast('😵 ' + e.message); });
+}
+function doPostBounty(btn) {
+  var t = $('bTitle').value.trim();
+  var g = parseInt($('bGold').value, 10);
+  if (!t) { toast('Give the bounty a name first!'); return; }
+  if (!g || g < 1) { toast('Set the gold reward!'); return; }
+  btn.disabled = true;
+  api('postBounty', parentPin, t, '🪙', g).then(function () {
+    btn.disabled = false;
+    $('bTitle').value = ''; $('bGold').value = '';
+    toast('🪙 Posted to the board!');
+    loadParentBoard();
+  }).catch(function (e) { btn.disabled = false; toast('😵 ' + e.message); });
+}
+function doDecideBounty(row, pay, btn) {
+  var reason = '';
+  if (!pay) reason = prompt('What still needs doing? (they\'ll see this)') || '';
+  btn.disabled = true;
+  api('decideBounty', parentPin, row, pay, reason).then(function () {
+    toast(pay ? '🪙 Paid — they\'ve been told!' : '🔁 Sent back with your note.');
+    loadParentBoard();
+  }).catch(function (e) { btn.disabled = false; toast('😵 ' + e.message); });
+}
+function doPricePrize(row, btn) {
+  var g = parseInt($('pg-' + row).value, 10);
+  if (!g || g < 1) { toast('Set a gold price first!'); return; }
+  btn.disabled = true;
+  api('pricePrize', parentPin, row, g, $('pa-' + row).checked, '').then(function () {
+    toast('🎁 It\'s in the shop!');
+    loadParentBoard();
+  }).catch(function (e) { btn.disabled = false; toast('😵 ' + e.message); });
+}
+function doRetirePrize(row, btn) {
+  var reason = prompt('Why not? (optional — they\'ll see it)') || '';
+  btn.disabled = true;
+  api('retirePrize', parentPin, row, reason).then(function () {
+    toast('Passed on that one.');
+    loadParentBoard();
+  }).catch(function (e) { btn.disabled = false; toast('😵 ' + e.message); });
+}
+function doFulfill(row, btn) {
+  btn.disabled = true;
+  api('fulfillRedemption', parentPin, row).then(function () {
+    toast('✅ Done — nice work, parent of the year.');
+    loadParentBoard();
+  }).catch(function (e) { btn.disabled = false; toast('😵 ' + e.message); });
+}
+function toggleEvInput(row, action, suggest) {
+  var box = $('evin-' + row);
+  box.dataset.action = action;
+  var txt = $('evtxt-' + row);
+  txt.placeholder = (action === 'conditions')
+    ? 'What do they need to do? e.g. clean room, send pics'
+    : 'Why not? (optional — they will see this)';
+  if (action === 'conditions' && suggest && !txt.value) {
+    txt.value = box.dataset.suggest || '';
+  }
+  $('evgo-' + row).textContent = (action === 'conditions') ? '📋 Send the deal' : '❌ Send the no';
+  box.style.display = (box.style.display === 'none' || !box.style.display) ? 'block' : 'none';
+}
+function doDecideEvent(row, action, btn) {
+  var text = '';
+  if (action !== 'approve') {
+    text = $('evtxt-' + row).value.trim();
+    if (action === 'conditions' && !text) { toast('Type what they need to do first! 📋'); return; }
+  }
+  btn.disabled = true;
+  api('decideEvent', parentPin, row, action, text).then(function () {
+    toast(action === 'approve' ? "🎈 Approved — it's on the calendar and they've been told!"
+        : action === 'conditions' ? '📋 Deal sent — they\'ll send proof.'
+        : '❌ Declined — they\'ll be notified.');
+    loadParentBoard();
+  }).catch(function (e) { btn.disabled = false; toast('😵 ' + e.message); });
+}
+function confirmEvInput(row, btn) {
+  doDecideEvent(row, $('evin-' + row).dataset.action, btn);
+}
+function doDecide(row, approve, btn) {
+  btn.disabled = true;
+  api('decide', parentPin, row, approve).then(function () {
+    toast(approve ? '✅ Approved — they\'ll be notified!'
+                  : '❌ Declined — they\'ll be notified.');
+    api('getBootstrap').then(function (b) { RECIPES = b.recipes || RECIPES; }).catch(function () {});
+    loadParentBoard();
+  }).catch(function (e) { btn.disabled = false; toast('😵 ' + e.message); });
+}
+
+/* enter key on PINs */
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter' || !document.activeElement) return;
+  if (document.activeElement.id === 'pin') unlock();
+  if (document.activeElement.id === 'shopPin') unlockShop();
+});
+
+/* ════════════════ demo backend so the preview is fully playable ════════════════ */
+function demoWeek(off) {
+  var now = new Date();
+  var start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  start.setDate(start.getDate() - start.getDay() + off * 7);
+  var days = [];
+  for (var i = 0; i < 7; i++) {
+    var d = new Date(start.getTime() + i * 86400000);
+    days.push({
+      label: d.toLocaleDateString(undefined, { weekday: 'long' }),
+      num: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      isToday: d.toDateString() === now.toDateString(),
+      events: []
+    });
+  }
+  if (off === 0) {
+    days[3].events.push({ title: '🍽️ Taco night', time: '6:00 PM – 7:00 PM', where: 'Home' });
+    days[5].events.push({ title: "🎉 Sleepover at Emma's — Skyler", time: '6:00 PM', where: "Emma's house" });
+    days[6].events.push({ title: '🎉 Basketball — Cameron', time: '3:00 PM – 5:00 PM', where: 'Riverside park' });
+  } else if (off === 1) {
+    days[2].events.push({ title: '📚 Test — Math ch. 5 — Skyler', time: 'All day', where: '' });
+    days[4].events.push({ title: '🎒 Field trip — Aquarium — Ryann', time: 'All day', where: '' });
+  }
+  var end = new Date(start.getTime() + 6 * 86400000);
+  return {
+    label: start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' – ' +
+           end.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+    days: days
+  };
+}
+var DEMO_LEVELS = [0, 100, 250, 450, 700, 1000, 1400, 1900, 2500, 3200];
+function demoLevel(xp) {
+  var lv = 1, base = 0, next = DEMO_LEVELS[1];
+  for (var i = DEMO_LEVELS.length - 1; i >= 0; i--) {
+    if (xp >= DEMO_LEVELS[i]) {
+      lv = i + 1; base = DEMO_LEVELS[i];
+      next = (i + 1 < DEMO_LEVELS.length) ? DEMO_LEVELS[i + 1] : DEMO_LEVELS[i] + 800;
+      break;
+    }
+  }
+  return { level: lv, intoLevel: xp - base, forNext: next - base };
+}
+var demoDB = {
+  appName: 'Family Hub',
+  recipes: ['Spaghetti Bolognese', 'Sheet-Pan Chicken Fajitas', 'Beef Chili',
+            'Chicken Stir-Fry', 'Baked Salmon & Veg', 'Homemade Pizza Night',
+            'Breakfast for Dinner', 'Big Salad + Rotisserie Chicken'],
+  family: [
+    { name: 'Bobby',   avatar: '🧔', type: 'Adult' },
+    { name: 'Sabrina', avatar: '👩', type: 'Adult' },
+    { name: 'Skyler',  avatar: '🐱⭐', type: 'Kid' },
+    { name: 'Cameron', avatar: '🏀', type: 'Kid' },
+    { name: 'Ryann',   avatar: '😻', type: 'Kid' }
+  ],
+  pin: '1234',
+  reqs: [
+    { row: 2, date: 'Aug 10', name: 'Skyler',  item: 'Oreos',         notes: 'family size',  status: 'Pending',  seen: false },
+    { row: 3, date: 'Aug 11', name: 'Ryann',   item: 'Juice boxes',   notes: 'the red ones', status: 'Approved', seen: false },
+    { row: 4, date: 'Aug 11', name: 'Cameron', item: 'Energy drinks', notes: '12-pack',      status: 'Declined', seen: false },
+    { row: 5, date: 'Aug 12', name: 'Bobby',   item: 'Coffee beans',  notes: 'dark roast',   status: 'Approved', seen: true }
+  ],
+  nextRow: 6,
+  nudge: { by: 'Sabrina', message: '', ts: 1, kind: 'meal' },
+  nudgeSeen: {},
+  events: [
+    { row: 2, name: 'Cameron', title: '🎉 Basketball at the park with Jaylen', date: '2026-08-15',
+      from: '15:00', until: '17:00', where: 'Riverside park', notes: '', status: 'Pending',
+      conditions: '', evidence: [], seen: false },
+    { row: 3, name: 'Skyler', title: "🎉 Sleepover at Emma's", date: '2026-08-14',
+      from: '18:00', until: '', where: "Emma's house", notes: 'back Saturday 10am',
+      status: 'NeedsProof', conditions: 'Room spotless + homework done — send pics! 📸',
+      evidence: [], seen: false }
+  ],
+  nextEvRow: 4,
+  dutyDefs: [
+    { row: 2, kid: 'All kids', type: 'Duty',  title: 'Make your bed',         emoji: '🛏️', xp: 10, active: true },
+    { row: 3, kid: 'All kids', type: 'Duty',  title: 'Brush teeth (AM + PM)', emoji: '🦷', xp: 10, active: true },
+    { row: 4, kid: 'All kids', type: 'Duty',  title: 'Tidy your zone',        emoji: '🧸', xp: 10, active: true },
+    { row: 5, kid: 'All kids', type: 'Daily', title: 'Move your body 20 min', emoji: '💪', xp: 10, active: true },
+    { row: 6, kid: 'All kids', type: 'Daily', title: 'One hour outside',      emoji: '🌳', xp: 15, active: true },
+    { row: 7, kid: 'All kids', type: 'Daily', title: 'Read 20 min',           emoji: '📖', xp: 10, active: true }
+  ],
+  nextDutyRow: 8,
+  // per-kid economy state
+  eco: {
+    'Skyler':  { done: {}, baseStreak: 6, xp: 230, gold: 35 },
+    'Cameron': { done: {}, baseStreak: 2, xp: 120, gold: 60 },
+    'Ryann':   { done: {}, baseStreak: 0, xp: 40,  gold: 15 }
+  },
+  bounties: [
+    { row: 2, posted: 'Aug 13', title: 'Wash the car (inside too)', emoji: '🚗', gold: 50, status: 'Open', claimedBy: '', proof: [], note: '' },
+    { row: 3, posted: 'Aug 13', title: 'Help spread mulch', emoji: '🌿', gold: 40, status: 'Open', claimedBy: '', proof: [], note: '' }
+  ],
+  nextBountyRow: 4,
+  prizes: [
+    { row: 2, kid: 'All kids', title: 'Pick the Friday movie', emoji: '🎬', gold: 20, status: 'Available', proposedBy: '', note: '' },
+    { row: 3, kid: 'All kids', title: '+30 min screen time', emoji: '📱', gold: 25, status: 'Available', proposedBy: '', note: 'One per day max' },
+    { row: 4, kid: 'All kids', title: 'Choose a dinner this week', emoji: '🍽️', gold: 20, status: 'Available', proposedBy: '', note: '' }
+  ],
+  nextPrizeRow: 5,
+  wardrobe: { 'Skyler': { owned: ['hat_bow'], equipped: { hat: 'hat_bow' } },
+              'Cameron': { owned: [], equipped: {} },
+              'Ryann': { owned: [], equipped: {} } },
+  redemptions: [],
+  nextLedgerRow: 2,
+  gotit: {},
+  docket: [
+    { idx: 0, day: 'Monday',    recipe: 'Spaghetti Bolognese',        cooked: true },
+    { idx: 1, day: 'Tuesday',   recipe: 'Sheet-Pan Chicken Fajitas',  cooked: true },
+    { idx: 2, day: 'Wednesday', recipe: 'Chicken Stir-Fry',           cooked: false },
+    { idx: 3, day: 'Thursday',  recipe: 'Beef Chili',                 cooked: false },
+    { idx: 4, day: 'Friday',    recipe: '',                            cooked: false },
+    { idx: 5, day: 'Saturday',  recipe: '',                            cooked: false },
+    { idx: 6, day: 'Sunday',    recipe: '',                            cooked: false }
+  ],
+  ingredients: {
+    'Spaghetti Bolognese': [['Ground beef', 1, 'lb', 'Meat & Seafood'], ['Spaghetti', 1, 'box', 'Pantry'], ['Crushed tomatoes (28 oz)', 1, 'can', 'Pantry'], ['Yellow onion', 1, '', 'Produce']],
+    'Sheet-Pan Chicken Fajitas': [['Chicken breast', 2, 'lb', 'Meat & Seafood'], ['Bell peppers', 3, '', 'Produce'], ['Yellow onion', 1, '', 'Produce'], ['Tortillas', 1, 'pack', 'Pantry']],
+    'Chicken Stir-Fry': [['Chicken breast', 1, 'lb', 'Meat & Seafood'], ['Frozen stir-fry veg', 1, 'bag', 'Frozen'], ['Rice', 1, 'bag', 'Pantry'], ['Soy sauce', 1, 'bottle', 'Pantry']],
+    'Beef Chili': [['Ground beef', 2, 'lb', 'Meat & Seafood'], ['Kidney beans', 2, 'can', 'Pantry'], ['Crushed tomatoes (28 oz)', 2, 'can', 'Pantry'], ['Yellow onion', 2, '', 'Produce']]
+  }
+};
+function demoDefsFor(name) {
+  return demoDB.dutyDefs.filter(function (d) {
+    return d.active && (d.kid === 'All kids' || d.kid === name);
+  });
+}
+function demoQuestState(name) {
+  var eco = demoDB.eco[name] || (demoDB.eco[name] = { done: {}, baseStreak: 0, xp: 0, gold: 0 });
+  var defs = demoDefsFor(name);
+  var duties = [], dailies = [], dutiesLeft = 0, allDone = defs.length > 0;
+  defs.forEach(function (d) {
+    var done = !!eco.done[d.title];
+    if (!done) allDone = false;
+    var item = { title: d.title, emoji: d.emoji, xp: d.xp, done: done };
+    if (d.type === 'Duty') { duties.push(item); if (!done) dutiesLeft++; }
+    else dailies.push(item);
+  });
+  var streak = eco.baseStreak + (allDone ? 1 : 0);
+  var lvl = demoLevel(eco.xp);
+  return {
+    duties: duties, dailies: dailies, dutiesLeft: dutiesLeft,
+    gateOpen: duties.length ? dutiesLeft === 0 : true,
+    streak: streak, todayComplete: allDone,
+    xp: eco.xp, level: lvl.level, intoLevel: lvl.intoLevel, forNext: lvl.forNext,
+    gold: eco.gold,
+    board: demoDB.bounties.filter(function (b) { return b.status !== 'Done'; })
+      .map(function (b) { var c = JSON.parse(JSON.stringify(b)); c.mine = (b.claimedBy === name); return c; })
+  };
+}
+function demoStanding(name) {
+  var q = demoQuestState(name);
+  return { hasQuests: q.duties.length + q.dailies.length > 0, gateOpen: q.gateOpen,
+           dutiesLeft: q.dutiesLeft, streak: q.streak,
+           missed7: name === 'Cameron' ? 3 : (name === 'Ryann' ? 2 : 0) };
+}
+function demoApi(fn, args) {
+  return new Promise(function (resolve, reject) {
+    setTimeout(function () {
+      try {
+        if (fn === 'getBootstrap') resolve({ appName: demoDB.appName, family: demoDB.family, recipes: demoDB.recipes.slice() });
+        else if (fn === 'submitRequest') {
+          if (!String(args[1] || '').trim()) throw new Error('Tell me what you want first!');
+          demoDB.reqs.push({ row: demoDB.nextRow++, date: 'Today', name: args[0],
+            item: args[1], notes: args[2] || '', status: 'Pending', seen: false,
+            type: args[3] ? 'Meal' : '', url: args[4] || '' });
+          if (args[3] && demoDB.nudge && demoDB.nudge.kind === 'meal') demoDB.nudgeSeen[args[0]] = Date.now();
+          resolve({ ok: true });
+        }
+        else if (fn === 'getNudge') {
+          var n = demoDB.nudge;
+          var s = demoDB.nudgeSeen[args[0]];
+          if (!n || n.by === args[0] || (s && s >= n.ts)) resolve({ active: false });
+          else resolve({ active: true, by: n.by, message: n.message || '', kind: n.kind || 'meal' });
+        }
+        else if (fn === 'dismissNudge') { demoDB.nudgeSeen[args[0]] = Date.now(); resolve({ ok: true }); }
+        else if (fn === 'sendNudge') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          demoDB.nudge = { by: args[1], message: args[2] || '', ts: Date.now(), kind: args[3] || 'meal' };
+          resolve({ ok: true, emailed: 4 });
+        }
+        else if (fn === 'getWeek') resolve(demoWeek(args[0] || 0));
+        else if (fn === 'getMyRequests')
+          resolve(demoDB.reqs.filter(function (r) { return r.name === args[0]; }).slice().reverse());
+        else if (fn === 'markSeen') {
+          demoDB.reqs.forEach(function (r) { if (r.name === args[0] && r.status !== 'Pending') r.seen = true; });
+          demoDB.events.forEach(function (e) {
+            if (e.name === args[0] && ['NeedsProof','Approved','Declined'].indexOf(e.status) >= 0) e.seen = true;
+          });
+          resolve({ ok: true });
+        }
+        else if (fn === 'submitEvent') {
+          if (!String(args[1] || '').trim()) throw new Error('Tell me what the event is first!');
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(args[2] || '')) throw new Error('Pick a day for it!');
+          demoDB.events.push({ row: demoDB.nextEvRow++, name: args[0], title: args[1],
+            date: args[2], from: args[3] || '', until: args[4] || '', where: args[5] || '',
+            notes: args[6] || '', status: 'Pending', conditions: '', evidence: [], seen: false });
+          if (demoDB.nudge && demoDB.nudge.kind === 'school') demoDB.nudgeSeen[args[0]] = Date.now();
+          resolve({ ok: true });
+        }
+        else if (fn === 'getMyEvents') {
+          var todayIso = new Date().toISOString().slice(0, 10);
+          var mine = demoDB.events.filter(function (e) { return e.name === args[0]; })
+            .slice().reverse().map(function (e) { return JSON.parse(JSON.stringify(e)); });
+          var st0 = demoStanding(args[0]);
+          mine.forEach(function (e) {
+            var priv = e.title.indexOf('🎉') === 0 || e.title.indexOf('🎂') === 0;
+            if (priv && e.status === 'Approved' && e.date === todayIso) {
+              e.todayGate = st0.gateOpen; e.dutiesLeft = st0.dutiesLeft;
+            }
+          });
+          resolve(mine);
+        }
+        else if (fn === 'decideEvent') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          var found = demoDB.events.filter(function (e) { return e.row === args[1]; })[0];
+          if (!found) throw new Error('That event no longer exists.');
+          if (args[2] === 'conditions') {
+            if (!String(args[3] || '').trim()) throw new Error('Type what they need to do first.');
+            found.status = 'NeedsProof'; found.conditions = args[3]; found.seen = false;
+          } else if (args[2] === 'decline') {
+            found.status = 'Declined'; if (args[3]) found.conditions = args[3]; found.seen = false;
+          } else { found.status = 'Approved'; found.seen = false; }
+          resolve({ ok: true });
+        }
+        else if (fn === 'submitEvidence') {
+          var ev2 = demoDB.events.filter(function (e) { return e.row === args[1]; })[0];
+          if (!ev2) throw new Error('That event no longer exists.');
+          ev2.evidence.push('https://drive.google.com/demo-proof-photo');
+          ev2.status = 'ProofSent'; ev2.seen = true;
+          resolve({ ok: true, url: 'https://drive.google.com/demo-proof-photo' });
+        }
+        else if (fn === 'getParentBoard') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          var standings = {};
+          demoDB.family.forEach(function (m) { if (m.type !== 'Adult') standings[m.name] = demoStanding(m.name); });
+          resolve({
+            pending: demoDB.reqs.filter(function (r) { return r.status === 'Pending'; }).slice().reverse(),
+            recent: demoDB.reqs.filter(function (r) { return r.status !== 'Pending'; }).slice().reverse(),
+            events: demoDB.events.filter(function (e) { return e.status !== 'Approved' && e.status !== 'Declined'; }).slice().reverse(),
+            eventsRecent: demoDB.events.filter(function (e) { return e.status === 'Approved' || e.status === 'Declined'; }).slice().reverse(),
+            standings: standings,
+            bountyVerify: demoDB.bounties.filter(function (b) { return b.status === 'Submitted'; }),
+            bountyOpen: demoDB.bounties.filter(function (b) { return b.status === 'Open' || b.status === 'Claimed'; }),
+            prizeProposals: demoDB.prizes.filter(function (p) { return p.status === 'Proposed'; }),
+            redemptions: demoDB.redemptions.filter(function (r) { return r.status === 'Pending'; }),
+            dutyDefs: demoDB.dutyDefs.filter(function (d) { return d.active; }),
+            nudge: demoDB.nudge ? { by: demoDB.nudge.by, date: 'this week' } : null
+          });
+        }
+        else if (fn === 'decide') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          demoDB.reqs.forEach(function (r) {
+            if (r.row === args[1]) {
+              r.status = args[2] ? 'Approved' : 'Declined'; r.seen = false;
+              if (args[2] && r.type === 'Meal' && demoDB.recipes.indexOf(r.item) < 0) demoDB.recipes.push(r.item);
+            }
+          });
+          resolve({ ok: true });
+        }
+        /* ── Hub 2.0 demo ── */
+        else if (fn === 'getQuests') resolve(demoQuestState(args[0]));
+        else if (fn === 'checkDuty') {
+          var eco = demoDB.eco[args[0]];
+          var wasComplete = demoQuestState(args[0]).todayComplete;
+          if (args[2]) eco.done[args[1]] = true; else delete eco.done[args[1]];
+          var def0 = demoDefsFor(args[0]).filter(function (d) { return d.title === args[1]; })[0];
+          if (def0) eco.xp += (args[2] ? def0.xp : -def0.xp);
+          var q = demoQuestState(args[0]);
+          var minted = null;
+          if (args[2] && q.todayComplete && !wasComplete &&
+              (q.streak % 7 === 0 || q.streak === 30 || q.streak === 100)) {
+            var g = (q.streak % 7 === 0 ? 10 : 0) + (q.streak === 30 ? 50 : 0) + (q.streak === 100 ? 200 : 0);
+            eco.gold += g;
+            minted = { gold: g, milestone: q.streak };
+            q.gold = eco.gold;
+          }
+          q.ok = true; q.minted = minted;
+          resolve(q);
+        }
+        else if (fn === 'claimBounty') {
+          var qs = demoQuestState(args[0]);
+          if (!qs.gateOpen) throw new Error('Finish your duties first — then the board opens! 🔒');
+          var bb = demoDB.bounties.filter(function (b) { return b.row === args[1]; })[0];
+          if (!bb || bb.status !== 'Open') throw new Error('Someone already claimed that one!');
+          bb.status = 'Claimed'; bb.claimedBy = args[0];
+          resolve({ ok: true });
+        }
+        else if (fn === 'dropBounty') {
+          var bd = demoDB.bounties.filter(function (b) { return b.row === args[1]; })[0];
+          if (!bd || bd.claimedBy !== args[0]) throw new Error('That claim isn\'t yours.');
+          bd.status = 'Open'; bd.claimedBy = '';
+          resolve({ ok: true });
+        }
+        else if (fn === 'submitBounty') {
+          var bs = demoDB.bounties.filter(function (b) { return b.row === args[1]; })[0];
+          if (!bs || bs.claimedBy !== args[0]) throw new Error('That claim isn\'t yours.');
+          if (args[2]) bs.proof.push('https://drive.google.com/demo-proof-photo');
+          bs.status = 'Submitted';
+          resolve({ ok: true });
+        }
+        else if (fn === 'postBounty') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          demoDB.bounties.push({ row: demoDB.nextBountyRow++, posted: 'Today', title: args[1],
+            emoji: args[2] || '🪙', gold: args[3], status: 'Open', claimedBy: '', proof: [], note: '' });
+          resolve({ ok: true });
+        }
+        else if (fn === 'decideBounty') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          var bv = demoDB.bounties.filter(function (b) { return b.row === args[1]; })[0];
+          if (!bv || bv.status !== 'Submitted') throw new Error('Nothing to verify on that one.');
+          if (args[2]) { bv.status = 'Done'; demoDB.eco[bv.claimedBy].gold += bv.gold; }
+          else { bv.status = 'Claimed'; bv.note = args[3] || ''; }
+          resolve({ ok: true });
+        }
+        else if (fn === 'getShop') {
+          var eco2 = demoDB.eco[args[0]];
+          var q2 = demoQuestState(args[0]);
+          var w = demoDB.wardrobe[args[0]] || (demoDB.wardrobe[args[0]] = { owned: [], equipped: {} });
+          resolve({
+            gold: eco2.gold, level: q2.level, streak: q2.streak,
+            prizes: demoDB.prizes.filter(function (p) {
+              return p.status === 'Available' && (p.kid === 'All kids' || p.kid === args[0]);
+            }),
+            myProposed: demoDB.prizes.filter(function (p) {
+              return p.status === 'Proposed' && p.proposedBy === args[0];
+            }),
+            pendingRedemptions: demoDB.redemptions.filter(function (r) {
+              return r.kid === args[0] && r.status === 'Pending';
+            }).map(function (r) { return { reason: r.reason, date: r.date }; }),
+            owned: w.owned.slice(), equipped: JSON.parse(JSON.stringify(w.equipped))
+          });
+        }
+        else if (fn === 'proposePrize') {
+          if (!String(args[1] || '').trim()) throw new Error('Tell me what the prize is first!');
+          demoDB.prizes.push({ row: demoDB.nextPrizeRow++, kid: args[0], title: args[1],
+            emoji: '🎁', gold: 0, status: 'Proposed', proposedBy: args[0], note: args[2] || '' });
+          resolve({ ok: true });
+        }
+        else if (fn === 'pricePrize') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          var pz = demoDB.prizes.filter(function (p) { return p.row === args[1]; })[0];
+          if (!pz) throw new Error('That prize no longer exists.');
+          pz.gold = args[2]; pz.status = 'Available';
+          if (args[3]) pz.kid = 'All kids';
+          resolve({ ok: true });
+        }
+        else if (fn === 'retirePrize') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          var pr = demoDB.prizes.filter(function (p) { return p.row === args[1]; })[0];
+          if (pr) { pr.status = 'Retired'; pr.note = args[2] || ''; }
+          resolve({ ok: true });
+        }
+        else if (fn === 'buyPrize') {
+          var pb = demoDB.prizes.filter(function (p) { return p.row === args[1]; })[0];
+          if (!pb || pb.status !== 'Available') throw new Error('That prize isn\'t available right now.');
+          var ecoB = demoDB.eco[args[0]];
+          if (ecoB.gold < pb.gold) throw new Error('You need ' + (pb.gold - ecoB.gold) + ' more gold for that! 🪙');
+          ecoB.gold -= pb.gold;
+          demoDB.redemptions.push({ row: demoDB.nextLedgerRow++, kid: args[0],
+            reason: '🎁 Prize: ' + pb.title, date: 'Today', gold: pb.gold, status: 'Pending' });
+          resolve({ ok: true, gold: ecoB.gold });
+        }
+        else if (fn === 'fulfillRedemption') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          var rd = demoDB.redemptions.filter(function (r) { return r.row === args[1]; })[0];
+          if (!rd || rd.status !== 'Pending') throw new Error('That redemption isn\'t pending.');
+          rd.status = 'Done';
+          resolve({ ok: true });
+        }
+        else if (fn === 'buyCosmetic') {
+          var item = cosmetic(args[1]);
+          if (!item) throw new Error('That item doesn\'t exist.');
+          if (item.unlock.streak) throw new Error('That one can\'t be bought — it\'s earned by a ' + item.unlock.streak + '-day streak! 🔥');
+          var wB = demoDB.wardrobe[args[0]];
+          if (wB.owned.indexOf(args[1]) >= 0) throw new Error('You already own that!');
+          var qB = demoQuestState(args[0]);
+          if (item.unlock.level && qB.level < item.unlock.level) throw new Error('That unlocks at level ' + item.unlock.level + ' — keep questing!');
+          var ecoC = demoDB.eco[args[0]];
+          if (ecoC.gold < item.cost) throw new Error('You need ' + (item.cost - ecoC.gold) + ' more gold! 🪙');
+          ecoC.gold -= item.cost;
+          wB.owned.push(args[1]);
+          wB.equipped[item.slot] = args[1];
+          resolve({ ok: true, gold: ecoC.gold });
+        }
+        else if (fn === 'equipCosmetic') {
+          var itemE = cosmetic(args[1]);
+          var wE = demoDB.wardrobe[args[0]];
+          if (!itemE || wE.owned.indexOf(args[1]) < 0) throw new Error('You don\'t own that yet!');
+          if (wE.equipped[itemE.slot] === args[1]) delete wE.equipped[itemE.slot];
+          else wE.equipped[itemE.slot] = args[1];
+          resolve({ ok: true });
+        }
+        else if (fn === 'addDuty') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          demoDB.dutyDefs.push({ row: demoDB.nextDutyRow++, kid: args[1] || 'All kids',
+            type: args[2] === 'Daily' ? 'Daily' : 'Duty', title: args[3],
+            emoji: args[4] || '⭐', xp: parseInt(args[5], 10) || 10, active: true });
+          resolve({ ok: true });
+        }
+        else if (fn === 'setDutyActive') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          demoDB.dutyDefs.forEach(function (d) { if (d.row === args[1]) d.active = !!args[2]; });
+          resolve({ ok: true });
+        }
+        else if (fn === 'getShopList') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          var picked = {};
+          demoDB.docket.forEach(function (d) { if (d.recipe) picked[d.recipe] = true; });
+          var merged = {}, order = [];
+          Object.keys(picked).forEach(function (rec) {
+            (demoDB.ingredients[rec] || []).forEach(function (ing) {
+              var key = ing[0].toLowerCase() + '|' + String(ing[2]).toLowerCase();
+              if (!merged[key]) { merged[key] = { key: key, name: ing[0], qty: 0, unit: ing[2], section: ing[3] }; order.push(key); }
+              merged[key].qty += ing[1];
+            });
+          });
+          resolve({
+            docket: JSON.parse(JSON.stringify(demoDB.docket)),
+            items: order.map(function (k) {
+              var m = merged[k];
+              return { key: m.key, name: m.name, qty: m.qty, unit: m.unit, section: m.section, got: !!demoDB.gotit[m.key] };
+            }),
+            extras: demoDB.reqs.filter(function (r) { return r.status === 'Approved' && r.type !== 'Meal'; })
+              .map(function (r) { return { row: r.row, name: r.item, notes: r.notes, by: r.name }; }),
+            recipes: demoDB.recipes.slice()
+          });
+        }
+        else if (fn === 'setGotIt') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          if (args[2]) demoDB.gotit[args[1]] = 1; else delete demoDB.gotit[args[1]];
+          resolve({ ok: true });
+        }
+        else if (fn === 'clearGotIts') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          demoDB.gotit = {};
+          resolve({ ok: true });
+        }
+        else if (fn === 'markBought') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          demoDB.reqs.forEach(function (r) { if (r.row === args[1]) r.status = 'Bought'; });
+          resolve({ ok: true });
+        }
+        else if (fn === 'setDocket') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          demoDB.docket.forEach(function (d) {
+            if (d.idx === args[1]) { d.recipe = args[2]; if (!args[2]) d.cooked = false; }
+          });
+          resolve({ ok: true });
+        }
+        else if (fn === 'setCooked') {
+          if (String(args[0]) !== demoDB.pin) throw new Error('Wrong PIN — try again!');
+          demoDB.docket.forEach(function (d) { if (d.idx === args[1]) d.cooked = !!args[2]; });
+          resolve({ ok: true });
+        }
+        else reject(new Error('Unknown fn ' + fn));
+      } catch (e) { reject(e); }
+    }, 220);
+  });
+}
+</script>
+</body>
+</html>
